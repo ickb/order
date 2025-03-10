@@ -1,0 +1,42 @@
+{
+  "name": "@ickb/order",
+  "version": "0.0.0",
+  "description": "UDT Limit Order utilities built on top of CCC",
+  "author": "phroi",
+  "license": "MIT",
+  "private": false,
+  "homepage": "https://github.com/ickb/order",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ickb/order.git"
+  },
+  "sideEffects": false,
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "scripts": {
+    "build": "pnpm run build:esm && pnpm run build:cjs && node dist/cjs/index.js",
+    "build:esm": "tsc",
+    "build:cjs": "tsc --module commonjs --outDir dist/cjs",
+    "lint": "eslint ./src"
+  },
+  "files": [
+    "/dist",
+    "/src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.1"
+  },
+  "dependencies": {
+    "@ckb-ccc/core": "canary",
+    "@ickb/dao": "^1000.0.1"
+  }
+}
