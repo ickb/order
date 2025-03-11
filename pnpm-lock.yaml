@@ -12,8 +12,8 @@ importers:
         specifier: canary
         version: 0.0.0-canary-20250214032328(typescript@5.8.2)
       '@ickb/dao':
-        specifier: ^1000.0.1
-        version: 1000.0.1(typescript@5.8.2)
+        specifier: ^1000.0.4
+        version: 1000.0.4(typescript@5.8.2)
     devDependencies:
       '@eslint/js':
         specifier: ^9.22.0
@@ -39,8 +39,8 @@ packages:
   '@ckb-ccc/core@0.0.0-canary-20250214032328':
     resolution: {integrity: sha512-eYtH4zpapgc35oEiIwblsvBO83s7RkU/907o9WoYAoc8XmvIYJj6jPoRrz6MfOfX0ipVYMZiTdxJ4FB9nM3KAg==}
 
-  '@eslint-community/eslint-utils@4.4.1':
-    resolution: {integrity: sha512-s3O3waFUrMV8P/XaF/+ZTp1X9XBZW1a4B97ZnjQF2KYWaFD2A8KyFBsrsfSjEmjn3RGWAIuvlneuZm3CUK3jbA==}
+  '@eslint-community/eslint-utils@4.5.0':
+    resolution: {integrity: sha512-RoV8Xs9eNwiDvhv7M+xcL4PWyRyIXRY/FLp3buU4h1EYfdF7unWUy3dOjPqb3C7rMUewIcqwW850PgS8h1o1yg==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     peerDependencies:
       eslint: ^6.0.0 || ^7.0.0 || >=8.0.0
@@ -97,8 +97,8 @@ packages:
     resolution: {integrity: sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ==}
     engines: {node: '>=18.18'}
 
-  '@ickb/dao@1000.0.1':
-    resolution: {integrity: sha512-tnhO9GcNjAdIA5eehx6SXPTwwNOE6Lg2/GRwJ3PPtTxbSe+9QBV0ttqYRrod9t+6+co2FjMru4ZraWy5quR+ng==}
+  '@ickb/dao@1000.0.4':
+    resolution: {integrity: sha512-gL03wC5y6fFxUyXDRfyJhMk7gAdHDEmmhsyU4PuUdJwfFlpqUuCiv2D4JoMUa5cavBozW97tXPj4QyT6JUHe+Q==}
 
   '@joyid/ckb@1.1.1':
     resolution: {integrity: sha512-UIDH41PKN6EnLp1j9/6P4Pb+IaBuJKwLRw7Azo6q4E7uLgYu1E1vjBCYwsyYY1xqr8iwwZ1eyrbNgnTIH2B4vQ==}
@@ -814,7 +814,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@eslint-community/eslint-utils@4.4.1(eslint@9.22.0)':
+  '@eslint-community/eslint-utils@4.5.0(eslint@9.22.0)':
     dependencies:
       eslint: 9.22.0
       eslint-visitor-keys: 3.4.3
@@ -871,7 +871,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@ickb/dao@1000.0.1(typescript@5.8.2)':
+  '@ickb/dao@1000.0.4(typescript@5.8.2)':
     dependencies:
       '@ckb-ccc/core': 0.0.0-canary-20250214032328(typescript@5.8.2)
     transitivePeerDependencies:
@@ -1007,7 +1007,7 @@ snapshots:
 
   '@typescript-eslint/utils@8.26.1(eslint@9.22.0)(typescript@5.8.2)':
     dependencies:
-      '@eslint-community/eslint-utils': 4.4.1(eslint@9.22.0)
+      '@eslint-community/eslint-utils': 4.5.0(eslint@9.22.0)
       '@typescript-eslint/scope-manager': 8.26.1
       '@typescript-eslint/types': 8.26.1
       '@typescript-eslint/typescript-estree': 8.26.1(typescript@5.8.2)
@@ -1225,7 +1225,7 @@ snapshots:
 
   eslint@9.22.0:
     dependencies:
-      '@eslint-community/eslint-utils': 4.4.1(eslint@9.22.0)
+      '@eslint-community/eslint-utils': 4.5.0(eslint@9.22.0)
       '@eslint-community/regexpp': 4.12.1
       '@eslint/config-array': 0.19.2
       '@eslint/config-helpers': 0.1.0
