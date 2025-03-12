@@ -37,6 +37,6 @@
   },
   "dependencies": {
     "@ckb-ccc/core": "canary",
-    "@ickb/dao": "^1000.0.4"
+    "@ickb/dao": "^1000.0.6"
   }
 }

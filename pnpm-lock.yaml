@@ -12,8 +12,8 @@ importers:
         specifier: canary
         version: 0.0.0-canary-20250214032328(typescript@5.8.2)
       '@ickb/dao':
-        specifier: ^1000.0.4
-        version: 1000.0.4(typescript@5.8.2)
+        specifier: ^1000.0.6
+        version: 1000.0.6(typescript@5.8.2)
     devDependencies:
       '@eslint/js':
         specifier: ^9.22.0
@@ -97,8 +97,8 @@ packages:
     resolution: {integrity: sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ==}
     engines: {node: '>=18.18'}
 
-  '@ickb/dao@1000.0.4':
-    resolution: {integrity: sha512-gL03wC5y6fFxUyXDRfyJhMk7gAdHDEmmhsyU4PuUdJwfFlpqUuCiv2D4JoMUa5cavBozW97tXPj4QyT6JUHe+Q==}
+  '@ickb/dao@1000.0.6':
+    resolution: {integrity: sha512-BEf+b43TkGt5jrD+KWaA55xRskbu8iY+P6fKuPfwp7BK7XND4bCEgv4xXSGCKYNiGWkGID3kMjdic9A+MCg1MQ==}
 
   '@joyid/ckb@1.1.1':
     resolution: {integrity: sha512-UIDH41PKN6EnLp1j9/6P4Pb+IaBuJKwLRw7Azo6q4E7uLgYu1E1vjBCYwsyYY1xqr8iwwZ1eyrbNgnTIH2B4vQ==}
@@ -871,7 +871,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@ickb/dao@1000.0.4(typescript@5.8.2)':
+  '@ickb/dao@1000.0.6(typescript@5.8.2)':
     dependencies:
       '@ckb-ccc/core': 0.0.0-canary-20250214032328(typescript@5.8.2)
     transitivePeerDependencies:
