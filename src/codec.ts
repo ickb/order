@@ -131,11 +131,76 @@ export class Relative extends mol.Entity.Base<RelativeLike, Relative>() {
   }
 }
 
-export const DataCodec = mol.struct({
-  udtAmount: mol.Uint128,
-  master: union({
-    relative: Relative,
-    absolute: OutPoint,
-  }),
-  info: Info,
+export const MasterCodec = union({
+  relative: Relative,
+  absolute: OutPoint,
 });
+
+export type MasterLike = mol.EncodableType<typeof MasterCodec>;
+export type Master = mol.DecodedType<typeof MasterCodec>;
+
+function masterFrom(master: MasterLike): Master {
+  const { type, value } = master;
+  if (type === "relative") {
+    return { type, value: Relative.from(value) };
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  } else if (type === "absolute") {
+    return { type, value: ccc.OutPoint.from(value) };
+  } else {
+    throw Error(`Invalid type ${String(type)}, not relative, not absolute`);
+  }
+}
+
+function masterIsValid(master: Master): boolean {
+  const { type, value } = master;
+  if (type === "relative") {
+    return value.isValid();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  } else if (type === "absolute") {
+    return /^0x[0-9a-f]{64}$/i.test(value.txHash) && value.index >= 0;
+  } else {
+    throw Error(`Invalid type ${String(type)}, not relative, not absolute`);
+  }
+}
+
+export interface DataLike {
+  udtAmount: ccc.NumLike;
+  master: MasterLike;
+  info: InfoLike;
+}
+
+@mol.codec(
+  mol.struct({
+    udtAmount: mol.Uint128,
+    master: MasterCodec,
+    info: Info,
+  }),
+)
+export class Data extends mol.Entity.Base<DataLike, Data>() {
+  constructor(
+    public udtAmount: ccc.Num,
+    public master: Master,
+    public info: Info,
+  ) {
+    super();
+  }
+
+  static override from(data: DataLike): Data {
+    if (data instanceof Data) {
+      return data;
+    }
+
+    const { udtAmount, master, info } = data;
+    return new Data(
+      ccc.numFrom(udtAmount),
+      masterFrom(master),
+      Info.from(info),
+    );
+  }
+
+  isValid(): boolean {
+    return (
+      this.udtAmount >= 0n && masterIsValid(this.master) && this.info.isValid()
+    );
+  }
+}
