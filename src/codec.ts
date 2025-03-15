@@ -1,4 +1,4 @@
-import { ccc, mol, OutPoint } from "@ckb-ccc/core";
+import { ccc, mol } from "@ckb-ccc/core";
 import { Int32, union } from "@ickb/dao";
 
 export interface RatioLike {
@@ -133,7 +133,7 @@ export class Relative extends mol.Entity.Base<RelativeLike, Relative>() {
 
 export const MasterCodec = union({
   relative: Relative,
-  absolute: OutPoint,
+  absolute: ccc.OutPoint,
 });
 
 export type MasterLike = mol.EncodableType<typeof MasterCodec>;
@@ -202,5 +202,17 @@ export class Data extends mol.Entity.Base<DataLike, Data>() {
     return (
       this.udtAmount >= 0n && masterIsValid(this.master) && this.info.isValid()
     );
+  }
+
+  getMaster(current: ccc.OutPoint): ccc.OutPoint {
+    const { type, value } = this.master;
+    if (type === "relative") {
+      return new ccc.OutPoint(current.txHash, current.index + value.distance);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    } else if (type === "absolute") {
+      return value;
+    } else {
+      throw Error(`Invalid type ${String(type)}, not relative, not absolute`);
+    }
   }
 }
