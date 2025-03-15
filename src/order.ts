@@ -1,6 +1,6 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
-import { Data, Info, Relative } from "./codec.js";
+import { Data, Info, Relative } from "./entities.js";
 
 export class Order {
   constructor(
@@ -25,9 +25,7 @@ export class Order {
       info,
     });
 
-    if (!data.isValid()) {
-      throw Error("Order mint failed, invalid order data");
-    }
+    data.validate();
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
