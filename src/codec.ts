@@ -40,6 +40,10 @@ export class Ratio extends mol.Entity.Base<RatioLike, Ratio>() {
   isPopulated(): boolean {
     return this.ckbScale > 0n && this.udtScale > 0n;
   }
+
+  static empty(): Ratio {
+    return new Ratio(0n, 0n);
+  }
 }
 
 export interface InfoLike {
@@ -77,6 +81,18 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
     );
   }
 
+  static create(
+    isCkb2Udt: boolean,
+    ratio: Ratio,
+    ckbMinMatchLog = Info.ckbMinMatchLogDefault(),
+  ): Info {
+    return new Info(
+      isCkb2Udt ? ratio : Ratio.empty(),
+      isCkb2Udt ? Ratio.empty() : ratio,
+      ckbMinMatchLog,
+    );
+  }
+
   isValid(): boolean {
     if (this.ckbMinMatchLog < 0 || this.ckbMinMatchLog > 64) {
       return false;
@@ -90,7 +106,19 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
       return this.ckbToUdt.isPopulated();
     }
 
+    // Check that if we convert from ckb to udt and then back from udt to ckb, it doesn't lose value.
+    if (
+      this.ckbToUdt.ckbScale * this.udtToCkb.udtScale <
+      this.ckbToUdt.udtScale * this.udtToCkb.ckbScale
+    ) {
+      return false;
+    }
+
     return this.ckbToUdt.isPopulated() && this.udtToCkb.isPopulated();
+  }
+
+  static ckbMinMatchLogDefault(): number {
+    return 33; // ~ 86 CKB
   }
 }
 
@@ -122,7 +150,11 @@ export class Relative extends mol.Entity.Base<RelativeLike, Relative>() {
     return new Relative(ccc.bytesFrom(padding), ccc.numFrom(distance));
   }
 
-  static getPadding(): ccc.Bytes {
+  static create(distance: ccc.Num): Relative {
+    return new Relative(Relative.padding(), distance);
+  }
+
+  static padding(): ccc.Bytes {
     return new Uint8Array(32);
   }
 
