@@ -1,12 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
-import {
-  Data,
-  Info,
-  Relative,
-  type MasterCell,
-  type OrderCell,
-} from "./entities.js";
+import { Data, Info, Relative } from "./entities.js";
+import type { MasterCell, OrderCell } from "./cells.js";
 
 export class Order {
   constructor(
