@@ -395,42 +395,103 @@ export class OrderCell {
     return this.data.getMaster(this.cell.outPoint);
   }
 
-  // Return the amount of UDT that needs to be given if order output CKB is ckbOut
-  givenUdt(ckbOut: ccc.FixedPoint): ccc.FixedPoint {
-    if (ckbOut < this.ckbOccupied) {
-      throw Error("Not enough output CKB to satisfy state rent");
-    }
+  matchCkb2Udt(udtAllowance: ccc.FixedPoint): {
+    isFulfilled: boolean;
+    ckbOut: ccc.FixedPoint;
+    udtOut: ccc.FixedPoint;
+  } {
     if (!this.isCkb2UdtMatchable()) {
-      throw Error("Match impossible in ckb to udt direction");
+      throw Error("Match impossible in CKB to UDT direction");
     }
+
     const { ckbScale, udtScale } = this.data.info.ckbToUdt;
-    const ckbAmount = this.ckbUnoccupied;
-    const udtAmount = this.data.udtAmount;
-    return minValidMatch(ckbScale, udtScale, ckbAmount, udtAmount, ckbOut);
+    const ckbIn = this.cell.cellOutput.capacity;
+    const udtIn = this.data.udtAmount;
+
+    {
+      // Try to fulfill completely the order
+      const ckbOut = this.ckbOccupied;
+      const udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
+      if (udtIn + udtAllowance >= udtOut) {
+        return {
+          isFulfilled: true,
+          ckbOut,
+          udtOut,
+        };
+      }
+    }
+
+    {
+      // UDT allowance limits the order fulfillment
+      const udtOut = udtIn + udtAllowance;
+      const ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
+      // DOS prevention: ckbMinMatch is the minimum partial match.
+      if (ckbIn < ckbOut + this.data.info.getCkbMinMatch()) {
+        throw Error("UDT Allowance too low");
+      }
+
+      return {
+        isFulfilled: false,
+        ckbOut,
+        udtOut,
+      };
+    }
   }
 
-  // Return the amount of CKB that needs to be given if order output UDT is udtOut
-  givenCkb(udtOut: ccc.FixedPoint): ccc.FixedPoint {
-    if (udtOut < ccc.Zero) {
-      throw Error("Negative udt amount");
-    }
+  matchUdt2Ckb(ckbAllowance: ccc.FixedPoint): {
+    isFulfilled: boolean;
+    ckbOut: ccc.FixedPoint;
+    udtOut: ccc.FixedPoint;
+  } {
     if (!this.isUdt2CkbMatchable()) {
-      throw Error("Match impossible in udt to ckb direction");
+      throw Error("Match impossible in UDT to CKB direction");
     }
+
     const { udtScale, ckbScale } = this.data.info.udtToCkb;
-    const udtAmount = this.data.udtAmount;
-    const ckbAmount = this.ckbUnoccupied;
-    return minValidMatch(udtScale, ckbScale, udtAmount, ckbAmount, udtOut);
+    const udtIn = this.data.udtAmount;
+    const ckbIn = this.cell.cellOutput.capacity;
+
+    {
+      // Try to fulfill completely the order
+      const udtOut = ccc.Zero;
+      const ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
+      if (ckbIn + ckbAllowance >= ckbOut) {
+        return {
+          isFulfilled: true,
+          ckbOut,
+          udtOut,
+        };
+      }
+    }
+
+    {
+      // CKB allowance limits the order fulfillment
+      const ckbOut = ckbIn + ckbAllowance;
+      const udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
+      // DoS prevention: the equivalent of ckbMinMatch is the minimum partial match.
+      if (
+        udtIn * udtScale <
+        udtOut * udtScale + this.data.info.getCkbMinMatch() * ckbScale
+      ) {
+        throw Error("CKB Allowance too low");
+      }
+
+      return {
+        isFulfilled: false,
+        ckbOut,
+        udtOut,
+      };
+    }
   }
 }
 
-// Limit order rule on non decreasing value:
+// Apply limit order rule on non decreasing value to calculate bOut:
 // min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
 // bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
 // But integer divisions truncate, so we need to round to the upper value
 // bOut = (aScale * (aIn - aOut) + bScale * bIn + bScale - 1) / bScale
 // bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1) - 1) / bScale
-function minValidMatch(
+function getNonDecreasing(
   aScale: ccc.Num,
   bScale: ccc.Num,
   aIn: ccc.FixedPoint,
