@@ -485,6 +485,39 @@ export class OrderCell {
       };
     }
   }
+
+  // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+  validateDescendant(descendant: OrderCell): void {
+    // Same cell, nothing to check
+    if (this.cell.outPoint.eq(descendant.cell.outPoint)) {
+      return;
+    }
+
+    if (!this.cell.cellOutput.lock.eq(descendant.cell.cellOutput.lock)) {
+      throw Error("Order script different");
+    }
+
+    const udt = this.cell.cellOutput.type;
+    if (!udt || !descendant.cell.cellOutput.type?.eq(udt)) {
+      throw Error("UDT type is different");
+    }
+
+    if (!descendant.getMaster().eq(this.getMaster())) {
+      throw Error("Master is different");
+    }
+
+    if (!this.data.info.eq(this.data.info)) {
+      throw Error("Info is different");
+    }
+
+    if (this.absTotal > descendant.absTotal) {
+      throw Error("Total value is lower than the original one");
+    }
+
+    if (this.absProgress > descendant.absProgress) {
+      throw Error("Progress is lower than the original one");
+    }
+  }
 }
 
 // Apply limit order rule on non decreasing value to calculate bOut:
@@ -501,4 +534,23 @@ function getNonDecreasing(
   aOut: ccc.FixedPoint,
 ): ccc.FixedPoint {
   return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
+}
+
+export class MasterCell {
+  constructor(
+    public cell: ccc.Cell,
+    public ancestor: OrderCell,
+  ) {}
+
+  validateDescendant(descendant: OrderCell): void {
+    if (!this.cell.cellOutput.type?.eq(descendant.cell.cellOutput.lock)) {
+      throw Error("Order script different");
+    }
+
+    if (!descendant.getMaster().eq(this.cell.outPoint)) {
+      throw Error("Master is different");
+    }
+
+    this.ancestor.validateDescendant(descendant);
+  }
 }

@@ -1,6 +1,12 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
-import { Data, Info, Relative, type OrderCell } from "./entities.js";
+import {
+  Data,
+  Info,
+  Relative,
+  type MasterCell,
+  type OrderCell,
+} from "./entities.js";
 
 export class Order {
   constructor(
@@ -20,7 +26,7 @@ export class Order {
       udtAmount,
       master: {
         type: "relative",
-        value: Relative.create(-1n), // master is appended right before its order
+        value: Relative.create(1n), // master is appended right after its order
       },
       info,
     });
@@ -29,12 +35,6 @@ export class Order {
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
-
-    // Append master cell to Outputs
-    tx.addOutput({
-      lock,
-      type: this.script,
-    });
 
     // Append order cell to Outputs
     const position = tx.addOutput(
@@ -46,6 +46,12 @@ export class Order {
     );
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     tx.outputs[position]!.capacity += ckbAmount;
+
+    // Append master cell to Outputs right after its order
+    tx.addOutput({
+      lock,
+      type: this.script,
+    });
   }
 
   matchCkb2Udt(
@@ -70,8 +76,11 @@ export class Order {
     isCkb2Udt: boolean,
     allowance: ccc.FixedPoint,
   ): void {
-    const udt = o.cell.cellOutput.type;
-    if (!udt?.eq(this.udtHandler.script)) {
+    if (!o.cell.cellOutput.lock.eq(this.script)) {
+      throw Error("Match impossible with non-order cell");
+    }
+
+    if (!o.cell.cellOutput.type?.eq(this.udtHandler.script)) {
       throw Error("Match impossible with different UDT type");
     }
 
@@ -98,5 +107,23 @@ export class Order {
         info: o.data.info,
       }).toBytes(),
     );
+  }
+
+  melt(tx: SmartTransaction, o: OrderCell, master: MasterCell): void {
+    if (!o.cell.cellOutput.lock.eq(this.script)) {
+      throw Error("Melt impossible with non-order cell");
+    }
+
+    if (!o.cell.cellOutput.type?.eq(this.udtHandler.script)) {
+      throw Error("Melt impossible with different UDT type");
+    }
+
+    master.validateDescendant(o);
+
+    tx.addCellDeps(this.cellDeps);
+    tx.addUdtHandlers(this.udtHandler);
+
+    tx.addInput(o.cell);
+    tx.addInput(master.cell);
   }
 }
