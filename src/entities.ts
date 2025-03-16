@@ -46,6 +46,25 @@ export class Ratio extends mol.Entity.Base<RatioLike, Ratio>() {
   static empty(): Ratio {
     return new Ratio(0n, 0n);
   }
+
+  // Compare directly on ckbScale and inversely to udtScale
+  compare(other: Ratio): number {
+    if (this.udtScale == other.udtScale) {
+      return Number(this.ckbScale - other.ckbScale);
+    }
+
+    if (this.ckbScale == other.ckbScale) {
+      return Number(other.udtScale - this.udtScale);
+    }
+
+    // Idea: o0.Ckb2Udt - o1.Ckb2Udt
+    // ~ o0.ckbScale / o0.udtScale - o1.ckbScale / o1.udtScale
+    // order equivalent to:
+    // ~ o0.ckbScale * o1.udtScale - o1.ckbScale * o0.udtScale
+    return Number(
+      this.ckbScale * other.udtScale - other.ckbScale * this.udtScale,
+    );
+  }
 }
 
 export interface InfoLike {
@@ -153,6 +172,14 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
 
   isDualRatio(): boolean {
     return this.isCkb2Udt() && this.isUdt2Ckb();
+  }
+
+  ckb2UdtCompare(other: Info): number {
+    return this.ckbToUdt.compare(other.ckbToUdt);
+  }
+
+  udt2CkbCompare(other: Info): number {
+    return other.udtToCkb.compare(this.udtToCkb);
   }
 
   static ckbMinMatchLogDefault(): number {
