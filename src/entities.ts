@@ -403,6 +403,7 @@ export class OrderCell {
     if (!this.isCkb2UdtMatchable()) {
       throw Error("Match impossible in CKB to UDT direction");
     }
+    this.data.validate();
 
     const { ckbScale, udtScale } = this.data.info.ckbToUdt;
     const ckbIn = this.cell.cellOutput.capacity;
@@ -446,6 +447,7 @@ export class OrderCell {
     if (!this.isUdt2CkbMatchable()) {
       throw Error("Match impossible in UDT to CKB direction");
     }
+    this.data.validate();
 
     const { udtScale, ckbScale } = this.data.info.udtToCkb;
     const udtIn = this.data.udtAmount;
