@@ -354,4 +354,8 @@ export class OrderCell {
   isMatchable(): boolean {
     return this.isCkb2UdtMatchable() || this.isUdt2CkbMatchable();
   }
+
+  getMaster(): ccc.OutPoint {
+    return this.data.getMaster(this.cell.outPoint);
+  }
 }
