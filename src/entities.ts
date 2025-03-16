@@ -1,5 +1,5 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { getCkbUnoccupied, Int32, union } from "@ickb/dao";
+import { getCkbOccupied, Int32, union } from "@ickb/dao";
 
 export interface RatioLike {
   ckbScale: ccc.NumLike;
@@ -328,6 +328,7 @@ export class OrderCell {
   constructor(
     public cell: ccc.Cell,
     public data: Data,
+    public ckbOccupied: ccc.FixedPoint,
     public ckbUnoccupied: ccc.FixedPoint,
     public absTotal: ccc.Num,
     public absProgress: ccc.Num,
@@ -338,7 +339,8 @@ export class OrderCell {
     data.validate();
 
     const udtAmount = data.udtAmount;
-    const ckbUnoccupied = getCkbUnoccupied(cell);
+    const ckbOccupied = getCkbOccupied(cell);
+    const ckbUnoccupied = cell.cellOutput.capacity - ckbOccupied;
 
     const { ckbToUdt, udtToCkb } = data.info;
     const isCkb2Udt = data.info.isCkb2Udt();
@@ -367,7 +369,14 @@ export class OrderCell {
         ? udtAmount * ckbToUdt.udtScale
         : ckbUnoccupied * udtToCkb.ckbScale;
 
-    return new OrderCell(cell, data, ckbUnoccupied, absTotal, absProgress);
+    return new OrderCell(
+      cell,
+      data,
+      ckbOccupied,
+      ckbUnoccupied,
+      absTotal,
+      absProgress,
+    );
   }
 
   isCkb2UdtMatchable(): boolean {
@@ -385,4 +394,48 @@ export class OrderCell {
   getMaster(): ccc.OutPoint {
     return this.data.getMaster(this.cell.outPoint);
   }
+
+  // Return the amount of UDT that needs to be given if order output CKB is ckbOut
+  givenUdt(ckbOut: ccc.FixedPoint): ccc.FixedPoint {
+    if (ckbOut < this.ckbOccupied) {
+      throw Error("Not enough output CKB to satisfy state rent");
+    }
+    if (!this.isCkb2UdtMatchable()) {
+      throw Error("Match impossible in ckb to udt direction");
+    }
+    const { ckbScale, udtScale } = this.data.info.ckbToUdt;
+    const ckbAmount = this.ckbUnoccupied;
+    const udtAmount = this.data.udtAmount;
+    return minValidMatch(ckbScale, udtScale, ckbAmount, udtAmount, ckbOut);
+  }
+
+  // Return the amount of CKB that needs to be given if order output UDT is udtOut
+  givenCkb(udtOut: ccc.FixedPoint): ccc.FixedPoint {
+    if (udtOut < ccc.Zero) {
+      throw Error("Negative udt amount");
+    }
+    if (!this.isUdt2CkbMatchable()) {
+      throw Error("Match impossible in udt to ckb direction");
+    }
+    const { udtScale, ckbScale } = this.data.info.udtToCkb;
+    const udtAmount = this.data.udtAmount;
+    const ckbAmount = this.ckbUnoccupied;
+    return minValidMatch(udtScale, ckbScale, udtAmount, ckbAmount, udtOut);
+  }
+}
+
+// Limit order rule on non decreasing value:
+// min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
+// bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
+// But integer divisions truncate, so we need to round to the upper value
+// bOut = (aScale * (aIn - aOut) + bScale * bIn + bScale - 1) / bScale
+// bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1) - 1) / bScale
+function minValidMatch(
+  aScale: ccc.Num,
+  bScale: ccc.Num,
+  aIn: ccc.FixedPoint,
+  bIn: ccc.FixedPoint,
+  aOut: ccc.FixedPoint,
+): ccc.FixedPoint {
+  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
 }
