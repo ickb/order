@@ -1,7 +1,7 @@
-import { ccc } from "@ckb-ccc/core";
+import { ccc, type Cell } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative } from "./entities.js";
-import type { MasterCell, OrderCell } from "./cells.js";
+import { OrderCell, OrderGroup } from "./cells.js";
 
 export class Order {
   constructor(
@@ -9,6 +9,13 @@ export class Order {
     public cellDeps: ccc.CellDep[],
     public udtHandler: UdtHandler,
   ) {}
+
+  isOrder(c: Cell): boolean {
+    return (
+      c.cellOutput.lock.eq(this.script) &&
+      Boolean(c.cellOutput.type?.eq(this.udtHandler.script))
+    );
+  }
 
   mint(
     tx: SmartTransaction,
@@ -71,12 +78,8 @@ export class Order {
     isCkb2Udt: boolean,
     allowance: ccc.FixedPoint,
   ): void {
-    if (!o.cell.cellOutput.lock.eq(this.script)) {
-      throw Error("Match impossible with non-order cell");
-    }
-
-    if (!o.cell.cellOutput.type?.eq(this.udtHandler.script)) {
-      throw Error("Match impossible with different UDT type");
+    if (!this.isOrder(o.cell)) {
+      throw Error("Match impossible with incompatible cell");
     }
 
     const { ckbOut, udtOut } = isCkb2Udt
@@ -104,21 +107,47 @@ export class Order {
     );
   }
 
-  melt(tx: SmartTransaction, o: OrderCell, master: MasterCell): void {
-    if (!o.cell.cellOutput.lock.eq(this.script)) {
-      throw Error("Melt impossible with non-order cell");
+  melt(tx: SmartTransaction, og: OrderGroup): void {
+    if (!this.isOrder(og.order.cell)) {
+      throw Error("Melt impossible with incompatible cell");
     }
 
-    if (!o.cell.cellOutput.type?.eq(this.udtHandler.script)) {
-      throw Error("Melt impossible with different UDT type");
-    }
-
-    master.validateDescendant(o);
+    og.validate();
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
 
-    tx.addInput(o.cell);
-    tx.addInput(master.cell);
+    tx.addInput(og.order.cell);
+    tx.addInput(og.master);
+  }
+
+  async findOrders(
+    client: ccc.Client,
+    // mylock?: ccc.ScriptLike,
+  ): Promise<{
+    orders: OrderCell[];
+    myOrders: OrderGroup[];
+  }> {
+    const orders: OrderCell[] = [];
+    for await (const cell of client.findCellsOnChain(
+      {
+        script: this.script,
+        scriptType: "lock",
+        filter: {
+          script: this.udtHandler.script,
+        },
+        scriptSearchMode: "exact",
+        withData: true,
+      },
+      "asc",
+      400, // https://github.com/nervosnetwork/ckb/pull/4576
+    )) {
+      const order = OrderCell.tryFrom(cell);
+      if (!order || !this.isOrder(cell)) {
+        continue;
+      }
+      orders.push(order);
+    }
+    return { orders, myOrders: [] };
   }
 }

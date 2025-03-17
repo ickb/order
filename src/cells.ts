@@ -12,7 +12,15 @@ export class OrderCell {
     public absProgress: ccc.Num,
   ) {}
 
-  static from(cell: ccc.Cell): OrderCell {
+  static tryFrom(cell: ccc.Cell): OrderCell | undefined {
+    try {
+      return OrderCell.createFrom(cell);
+    } catch {
+      return undefined;
+    }
+  }
+
+  static createFrom(cell: ccc.Cell): OrderCell {
     const data = Data.decode(cell.outputData);
     data.validate();
 
@@ -214,21 +222,22 @@ function getNonDecreasing(
   return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
 }
 
-export class MasterCell {
+export class OrderGroup {
   constructor(
-    public cell: ccc.Cell,
-    public ancestor: OrderCell,
+    public master: ccc.Cell,
+    public order: OrderCell,
+    public origin: OrderCell,
   ) {}
 
-  validateDescendant(descendant: OrderCell): void {
-    if (!this.cell.cellOutput.type?.eq(descendant.cell.cellOutput.lock)) {
+  validate(): void {
+    if (!this.master.cellOutput.type?.eq(this.order.cell.cellOutput.lock)) {
       throw Error("Order script different");
     }
 
-    if (!descendant.getMaster().eq(this.cell.outPoint)) {
+    if (!this.order.getMaster().eq(this.master.outPoint)) {
       throw Error("Master is different");
     }
 
-    this.ancestor.validateDescendant(descendant);
+    this.origin.validateDescendant(this.order);
   }
 }
