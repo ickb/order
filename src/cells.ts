@@ -173,7 +173,7 @@ export class OrderCell {
   }
 
   // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
-  validateDescendant(descendant: OrderCell): void {
+  validate(descendant: OrderCell): void {
     // Same cell, nothing to check
     if (this.cell.outPoint.eq(descendant.cell.outPoint)) {
       return;
@@ -203,6 +203,24 @@ export class OrderCell {
     if (this.absProgress > descendant.absProgress) {
       throw Error("Progress is lower than the original one");
     }
+  }
+
+  // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+  resolve(descendants: OrderCell[]): OrderCell | undefined {
+    let best: OrderCell | undefined = undefined;
+    for (const descendant of descendants) {
+      try {
+        this.validate(descendant);
+      } catch {
+        continue;
+      }
+
+      if (descendant.absProgress > (best?.absProgress ?? -1n)) {
+        best = descendant;
+      }
+    }
+
+    return best;
   }
 }
 
@@ -238,6 +256,10 @@ export class OrderGroup {
       throw Error("Master is different");
     }
 
-    this.origin.validateDescendant(this.order);
+    this.origin.validate(this.order);
+  }
+
+  isOwner(lock: ccc.ScriptLike): boolean {
+    return this.master.cellOutput.lock.eq(lock);
   }
 }

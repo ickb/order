@@ -1,4 +1,4 @@
-import { ccc, type Cell } from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
@@ -10,11 +10,15 @@ export class Order {
     public udtHandler: UdtHandler,
   ) {}
 
-  isOrder(c: Cell): boolean {
+  isOrder(cell: ccc.Cell): boolean {
     return (
-      c.cellOutput.lock.eq(this.script) &&
-      Boolean(c.cellOutput.type?.eq(this.udtHandler.script))
+      cell.cellOutput.lock.eq(this.script) &&
+      Boolean(cell.cellOutput.type?.eq(this.udtHandler.script))
     );
+  }
+
+  isMaster(cell: ccc.Cell): boolean {
+    return Boolean(cell.cellOutput.type?.eq(this.script));
   }
 
   mint(
@@ -121,13 +125,56 @@ export class Order {
     tx.addInput(og.master);
   }
 
-  async findOrders(
-    client: ccc.Client,
-    // mylock?: ccc.ScriptLike,
-  ): Promise<{
-    orders: OrderCell[];
-    myOrders: OrderGroup[];
-  }> {
+  async findOrders(client: ccc.Client): Promise<OrderGroup[]> {
+    const [simpleOrders, allMasters] = await Promise.all([
+      this.findSimpleOrders(client),
+      this.findAllMasters(client),
+    ]);
+
+    const rawGroups = new Map(
+      allMasters.map((c) => [
+        c.outPoint.toBytes().toString(),
+        {
+          master: c,
+          origin: undefined as OrderCell | undefined,
+          orders: [] as OrderCell[],
+        },
+      ]),
+    );
+
+    for (const order of simpleOrders) {
+      const master = order.getMaster();
+      const key = master.toBytes().toString();
+      const rawGroup = rawGroups.get(key);
+      if (!rawGroup) {
+        continue;
+      }
+      rawGroup.orders.push(order);
+      if (rawGroup.origin) {
+        continue;
+      }
+      rawGroup.origin = await this.findOrigin(client, master);
+      if (!rawGroup.origin) {
+        rawGroups.delete(key);
+      }
+    }
+
+    const result: OrderGroup[] = [];
+    for (const { master, origin, orders } of rawGroups.values()) {
+      if (orders.length === 0 || !origin) {
+        continue;
+      }
+      const order = origin.resolve(orders);
+      if (!order) {
+        continue;
+      }
+      result.push(new OrderGroup(master, order, origin));
+    }
+
+    return result;
+  }
+
+  private async findSimpleOrders(client: ccc.Client): Promise<OrderCell[]> {
     const orders: OrderCell[] = [];
     for await (const cell of client.findCellsOnChain(
       {
@@ -148,6 +195,57 @@ export class Order {
       }
       orders.push(order);
     }
-    return { orders, myOrders: [] };
+    return orders;
+  }
+
+  private async findAllMasters(client: ccc.Client): Promise<ccc.Cell[]> {
+    const masters: ccc.Cell[] = [];
+    for await (const cell of client.findCellsOnChain(
+      {
+        script: this.script,
+        scriptType: "type",
+        scriptSearchMode: "exact",
+        withData: true,
+      },
+      "asc",
+      400, // https://github.com/nervosnetwork/ckb/pull/4576
+    )) {
+      if (!this.isMaster(cell)) {
+        continue;
+      }
+      masters.push(cell);
+    }
+    return masters;
+  }
+
+  private async findOrigin(
+    client: ccc.Client,
+    master: ccc.OutPoint,
+  ): Promise<OrderCell | undefined> {
+    const { txHash, index: mIndex } = master;
+    for (let index = mIndex - 1n; index >= ccc.Zero; index--) {
+      const cell = await client.getCell({ txHash, index });
+      if (!cell) {
+        return;
+      }
+
+      const order = OrderCell.tryFrom(cell);
+      if (order?.getMaster().eq(master)) {
+        return order;
+      }
+    }
+
+    // eslint-disable-next-line no-constant-condition, @typescript-eslint/no-unnecessary-condition
+    for (let index = mIndex + 1n; true; index++) {
+      const cell = await client.getCell({ txHash, index });
+      if (!cell) {
+        return;
+      }
+
+      const order = OrderCell.tryFrom(cell);
+      if (order?.getMaster().eq(master)) {
+        return order;
+      }
+    }
   }
 }
