@@ -136,7 +136,7 @@ export class Order {
         c.outPoint.toBytes().toString(),
         {
           master: c,
-          origin: undefined as OrderCell | undefined,
+          origin: undefined as Promise<OrderCell | undefined> | undefined,
           orders: [] as OrderCell[],
         },
       ]),
@@ -153,15 +153,20 @@ export class Order {
       if (rawGroup.origin) {
         continue;
       }
-      rawGroup.origin = await this.findOrigin(client, master);
-      if (!rawGroup.origin) {
-        rawGroups.delete(key);
-      }
+      rawGroup.origin = this.findOrigin(client, master);
     }
 
     const result: OrderGroup[] = [];
-    for (const { master, origin, orders } of rawGroups.values()) {
-      if (orders.length === 0 || !origin) {
+    for (const {
+      master,
+      origin: originPromise,
+      orders,
+    } of rawGroups.values()) {
+      if (orders.length === 0 || !originPromise) {
+        continue;
+      }
+      const origin = await originPromise;
+      if (!origin) {
         continue;
       }
       const order = origin.resolve(orders);
