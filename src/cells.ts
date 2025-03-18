@@ -247,6 +247,20 @@ export class OrderGroup {
     public origin: OrderCell,
   ) {}
 
+  static tryFrom(
+    master: ccc.Cell,
+    order: OrderCell,
+    origin: OrderCell,
+  ): OrderGroup | undefined {
+    try {
+      const og = new OrderGroup(master, order, origin);
+      og.validate();
+      return og;
+    } catch {
+      return undefined;
+    }
+  }
+
   validate(): void {
     if (!this.master.cellOutput.type?.eq(this.order.cell.cellOutput.lock)) {
       throw Error("Order script different");

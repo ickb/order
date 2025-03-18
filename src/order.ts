@@ -173,7 +173,13 @@ export class Order {
       if (!order) {
         continue;
       }
-      result.push(new OrderGroup(master, order, origin));
+
+      const orderGroup = OrderGroup.tryFrom(master, order, origin);
+      if (!orderGroup) {
+        continue;
+      }
+
+      result.push(orderGroup);
     }
 
     return result;
