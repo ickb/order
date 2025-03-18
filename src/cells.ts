@@ -215,7 +215,12 @@ export class OrderCell {
         continue;
       }
 
-      if (descendant.absProgress > (best?.absProgress ?? -1n)) {
+      // Pick order with best absProgress. At equality of absProgress, give preference to newly minted orders
+      if (
+        !best ||
+        best.absProgress < descendant.absProgress ||
+        (best.absProgress === descendant.absProgress && !best.data.isMint())
+      ) {
         best = descendant;
       }
     }
