@@ -19,13 +19,13 @@ export class OrderCell {
 
   static tryFrom(cell: ccc.Cell): OrderCell | undefined {
     try {
-      return OrderCell.createFrom(cell);
+      return OrderCell.mustFrom(cell);
     } catch {
       return undefined;
     }
   }
 
-  static createFrom(cell: ccc.Cell): OrderCell {
+  static mustFrom(cell: ccc.Cell): OrderCell {
     const data = Data.decode(cell.outputData);
     data.validate();
 
@@ -133,10 +133,9 @@ export class OrderCell {
   }
 
   partialsCkb2Udt(udtStep: ccc.FixedPoint): Match[] {
-    if (!this.isCkb2UdtMatchable()) {
+    if (!this.isCkb2UdtMatchable() || !this.data.isValid()) {
       return [];
     }
-    this.data.validate();
 
     const { ckbScale, udtScale } = this.data.info.ckbToUdt;
     const { ckbIn, udtIn } = this.getAmounts();
@@ -215,10 +214,9 @@ export class OrderCell {
   }
 
   partialsUdt2Ckb(ckbStep: ccc.FixedPoint): Match[] {
-    if (!this.isUdt2CkbMatchable()) {
-      throw Error("Match impossible in UDT to CKB direction");
+    if (!this.isUdt2CkbMatchable() || !this.data.isValid()) {
+      return [];
     }
-    this.data.validate();
 
     const { ckbScale, udtScale } = this.data.info.udtToCkb;
     const { ckbIn, udtIn } = this.getAmounts();
@@ -287,13 +285,20 @@ export class OrderCell {
     }
   }
 
+  isValid(descendant: OrderCell): boolean {
+    try {
+      this.validate(descendant);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
   resolve(descendants: OrderCell[]): OrderCell | undefined {
     let best: OrderCell | undefined = undefined;
     for (const descendant of descendants) {
-      try {
-        this.validate(descendant);
-      } catch {
+      if (!this.isValid(descendant)) {
         continue;
       }
 
@@ -339,13 +344,11 @@ export class OrderGroup {
     order: OrderCell,
     origin: OrderCell,
   ): OrderGroup | undefined {
-    try {
-      const og = new OrderGroup(master, order, origin);
-      og.validate();
+    const og = new OrderGroup(master, order, origin);
+    if (og.isValid()) {
       return og;
-    } catch {
-      return undefined;
     }
+    return undefined;
   }
 
   validate(): void {
@@ -358,6 +361,15 @@ export class OrderGroup {
     }
 
     this.origin.validate(this.order);
+  }
+
+  isValid(): boolean {
+    try {
+      this.validate();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   isOwner(lock: ccc.ScriptLike): boolean {

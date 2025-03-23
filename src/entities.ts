@@ -35,6 +35,15 @@ export class Ratio extends mol.Entity.Base<RatioLike, Ratio>() {
     }
   }
 
+  isValid(): boolean {
+    try {
+      this.validate();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   isEmpty(): boolean {
     return this.ckbScale === 0n && this.udtScale === 0n;
   }
@@ -156,6 +165,15 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
     }
   }
 
+  isValid(): boolean {
+    try {
+      this.validate();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   getCkbMinMatch(): ccc.FixedPoint {
     return 1n << BigInt(this.ckbMinMatchLog);
   }
@@ -226,6 +244,15 @@ export class Relative extends mol.Entity.Base<RelativeLike, Relative>() {
   validate(): void {
     if (this.padding.length != 32 || this.padding.some((x) => x !== 0)) {
       throw Error("Relative master invalid, non standard padding");
+    }
+  }
+
+  isValid(): boolean {
+    try {
+      this.validate();
+      return true;
+    } catch {
+      return false;
     }
   }
 }
@@ -305,6 +332,15 @@ export class Data extends mol.Entity.Base<DataLike, Data>() {
     }
     masterValidate(this.master);
     this.info.validate();
+  }
+
+  isValid(): boolean {
+    try {
+      this.validate();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   isMint(): boolean {
