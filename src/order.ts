@@ -1,7 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative } from "./entities.js";
-import { OrderCell, OrderGroup } from "./cells.js";
+import { OrderCell, OrderGroup, type Match } from "./cells.js";
 
 export class Order {
   constructor(
@@ -109,6 +109,56 @@ export class Order {
         info: o.data.info,
       }).toBytes(),
     );
+  }
+
+  partials(
+    orders: OrderCell[],
+    isCkb2Udt: boolean,
+    step: ccc.FixedPoint,
+  ): {
+    in: OrderCell;
+    out: Match & {
+      ckbGain: bigint;
+      udtGain: bigint;
+    };
+  }[][] {
+    const allPartials: {
+      in: OrderCell;
+      out: Match & {
+        ckbGain: bigint;
+        udtGain: bigint;
+      };
+    }[][] = [];
+
+    orders = isCkb2Udt
+      ? [...orders].sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
+      : [...orders].sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
+
+    for (const order of orders) {
+      const { ckbIn, udtIn } = order.getAmounts();
+      const partials = (
+        isCkb2Udt ? order.partialsCkb2Udt(step) : order.partialsUdt2Ckb(step)
+      ).map((match) => ({
+        in: order,
+        out: {
+          ...match,
+          ckbGain: ckbIn - match.ckbOut,
+          udtGain: udtIn - match.udtOut,
+        },
+      }));
+
+      const first = partials[0];
+      if (
+        !first ||
+        (isCkb2Udt ? -first.out.udtGain : -first.out.ckbGain) > step // Minimal fulfillment is too big
+      ) {
+        continue;
+      }
+
+      allPartials.push(partials);
+    }
+
+    return allPartials;
   }
 
   melt(tx: SmartTransaction, og: OrderGroup): void {
