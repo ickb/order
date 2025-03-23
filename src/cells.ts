@@ -1,5 +1,4 @@
 import { ccc } from "@ckb-ccc/core";
-import { getCkbOccupied } from "@ickb/dao";
 import { Data } from "./entities.js";
 
 export interface Match {
@@ -31,8 +30,8 @@ export class OrderCell {
     data.validate();
 
     const udtAmount = data.udtAmount;
-    const ckbOccupied = getCkbOccupied(cell);
-    const ckbUnoccupied = cell.cellOutput.capacity - ckbOccupied;
+    const ckbUnoccupied = cell.capacityFree;
+    const ckbOccupied = cell.cellOutput.capacity - cell.capacityFree;
 
     const { ckbToUdt, udtToCkb } = data.info;
     const isCkb2Udt = data.info.isCkb2Udt();

@@ -1,5 +1,5 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { Int32, union } from "@ickb/dao";
+import { CheckedInt32LE, union } from "@ickb/dao";
 
 export interface RatioLike {
   ckbScale: ccc.NumLike;
@@ -195,7 +195,7 @@ export interface RelativeLike {
 @mol.codec(
   mol.struct({
     padding: mol.Byte32,
-    distance: Int32,
+    distance: CheckedInt32LE,
   }),
 )
 export class Relative extends mol.Entity.Base<RelativeLike, Relative>() {

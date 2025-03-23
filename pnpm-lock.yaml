@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@ckb-ccc/core':
-        specifier: canary
-        version: 0.0.0-canary-20250214032328(typescript@5.8.2)
+        specifier: ^1.8.0
+        version: 1.8.0(typescript@5.8.2)
       '@ickb/dao':
-        specifier: ^1000.0.7
-        version: 1000.0.7(typescript@5.8.2)
+        specifier: ^1000.0.8
+        version: 1000.0.8(typescript@5.8.2)
     devDependencies:
       '@eslint/js':
         specifier: ^9.23.0
@@ -36,8 +36,8 @@ packages:
   '@adraffy/ens-normalize@1.10.1':
     resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
 
-  '@ckb-ccc/core@0.0.0-canary-20250214032328':
-    resolution: {integrity: sha512-eYtH4zpapgc35oEiIwblsvBO83s7RkU/907o9WoYAoc8XmvIYJj6jPoRrz6MfOfX0ipVYMZiTdxJ4FB9nM3KAg==}
+  '@ckb-ccc/core@1.8.0':
+    resolution: {integrity: sha512-P6DGpyt7gYUSg+LUueNdSqPxueLMEisknJFa9XKhD/N3bT9Nmcy4YmOlZ1WoNsFxue26IzRz7uWCLh2YeQ4tBA==}
 
   '@eslint-community/eslint-utils@4.5.1':
     resolution: {integrity: sha512-soEIOALTfTK6EjmKMMoLugwaP0rzkad90iIWd1hMO9ARkSAyjfMfkRRhLvD5qH7vvM0Cg72pieUfR6yh6XxC4w==}
@@ -97,8 +97,8 @@ packages:
     resolution: {integrity: sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ==}
     engines: {node: '>=18.18'}
 
-  '@ickb/dao@1000.0.7':
-    resolution: {integrity: sha512-VolSggjbDYZfuStBvCGFuWrfJLmjzNVQXf2JukBUydN6bqh2Tux/HwCTz1CBy93KvGS4X8VQQKMzhhIsgDAHzA==}
+  '@ickb/dao@1000.0.8':
+    resolution: {integrity: sha512-aoRhh2Sk6NP23AmIX9pT1Q884y5BAGENpPzxf0DHFWDZMxpcU0COBz8J13klsvjPzrYnWplqhy10Qehe9RmvWQ==}
 
   '@joyid/ckb@1.1.2':
     resolution: {integrity: sha512-+e+ISF566zaKNhKNSSS5kBw8or4Kb5Xqxe/2jVkUXKkqVHSS02Trrqe0g4IjSyeN9bszzolr1XgStv2hz62tqA==}
@@ -792,7 +792,7 @@ snapshots:
 
   '@adraffy/ens-normalize@1.10.1': {}
 
-  '@ckb-ccc/core@0.0.0-canary-20250214032328(typescript@5.8.2)':
+  '@ckb-ccc/core@1.8.0(typescript@5.8.2)':
     dependencies:
       '@joyid/ckb': 1.1.2(typescript@5.8.2)
       '@noble/ciphers': 0.5.3
@@ -871,9 +871,9 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@ickb/dao@1000.0.7(typescript@5.8.2)':
+  '@ickb/dao@1000.0.8(typescript@5.8.2)':
     dependencies:
-      '@ckb-ccc/core': 0.0.0-canary-20250214032328(typescript@5.8.2)
+      '@ckb-ccc/core': 1.8.0(typescript@5.8.2)
     transitivePeerDependencies:
       - bufferutil
       - encoding
