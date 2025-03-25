@@ -1,10 +1,10 @@
-import { ccc } from "@ckb-ccc/core";
+import { ccc, type FixedPoint } from "@ckb-ccc/core";
 import { Data } from "./entities.js";
 
 export interface Match {
   isFulfilled: boolean;
-  ckbOut: ccc.FixedPoint;
-  udtOut: ccc.FixedPoint;
+  aOut: ccc.FixedPoint;
+  bOut: ccc.FixedPoint;
 }
 
 export class OrderCell {
@@ -93,163 +93,61 @@ export class OrderCell {
     };
   }
 
-  matchCkb2Udt(udtAllowance: ccc.FixedPoint): Match {
-    if (!this.isCkb2UdtMatchable()) {
-      throw Error("Match impossible in CKB to UDT direction");
+  match(
+    isCkb2Udt: boolean,
+    allowance: ccc.FixedPoint,
+    steps = Number.POSITIVE_INFINITY,
+  ): Match[] {
+    let aScale: ccc.Num;
+    let bScale: ccc.Num;
+    let aIn: ccc.FixedPoint;
+    let bIn: ccc.FixedPoint;
+    let aMinMatch: ccc.FixedPoint;
+    let aMin: FixedPoint;
+    if (isCkb2Udt) {
+      ({ ckbScale: aScale, udtScale: bScale } = this.data.info.ckbToUdt);
+      ({ ckbIn: aIn, udtIn: bIn } = this.getAmounts());
+      aMinMatch = this.data.info.getCkbMinMatch();
+      aMin = this.ckbOccupied;
+    } else {
+      ({ ckbScale: bScale, udtScale: aScale } = this.data.info.ckbToUdt);
+      ({ ckbIn: bIn, udtIn: aIn } = this.getAmounts());
+      aMinMatch =
+        (this.data.info.getCkbMinMatch() * bScale + aScale - 1n) / aScale;
+      aMin = ccc.Zero;
     }
-    this.data.validate();
 
-    const { ckbScale, udtScale } = this.data.info.ckbToUdt;
-    const { ckbIn, udtIn } = this.getAmounts();
-
-    {
-      // Try to fulfill completely the order
-      const ckbOut = this.ckbOccupied;
-      const udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
-      if (udtIn + udtAllowance >= udtOut) {
-        return {
-          isFulfilled: true,
-          ckbOut,
-          udtOut,
-        };
-      }
-    }
-
-    {
-      // UDT allowance limits the order fulfillment
-      const udtOut = udtIn + udtAllowance;
-      const ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
-      // DOS prevention: ckbMinMatch is the minimum partial match.
-      if (ckbIn < ckbOut + this.data.info.getCkbMinMatch()) {
-        throw Error("UDT Allowance too low");
-      }
-
-      return {
-        isFulfilled: false,
-        ckbOut,
-        udtOut,
-      };
-    }
-  }
-
-  partialsCkb2Udt(udtStep: ccc.FixedPoint): Match[] {
-    if (!this.isCkb2UdtMatchable() || !this.data.isValid()) {
+    if (aIn <= aMin || aScale <= 0n || bScale <= 0n || steps <= 0) {
       return [];
     }
 
-    const { ckbScale, udtScale } = this.data.info.ckbToUdt;
-    const { ckbIn, udtIn } = this.getAmounts();
+    let bOut = bIn + allowance;
+    let aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
 
-    const ckbMinMatch = this.data.info.getCkbMinMatch();
-    const ckbMinOut = this.ckbOccupied;
-
-    const result: Match[] = [];
-
-    // Try to fulfill completely the order
-    let isFulfilled = true;
-    let ckbOut = ckbMinOut;
-    let udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
-
-    {
-      // Equalize all steps
-      const udtDelta = udtOut - udtIn;
-      const nSteps = (udtDelta + udtStep - 1n) / udtStep;
-      udtStep = udtDelta / nSteps;
-    }
-
-    let respectsCkbMinMatch = true;
-    while (respectsCkbMinMatch) {
-      result.push({ isFulfilled, ckbOut, udtOut });
-
-      // udtOut limits the order fulfillment
-      isFulfilled = false;
-      udtOut -= udtStep;
-      ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
-      respectsCkbMinMatch = ckbIn - ckbOut >= ckbMinMatch;
-    }
-
-    return result.reverse();
-  }
-
-  matchUdt2Ckb(ckbAllowance: ccc.FixedPoint): Match {
-    if (!this.isUdt2CkbMatchable()) {
-      throw Error("Match impossible in UDT to CKB direction");
-    }
-    this.data.validate();
-
-    const { udtScale, ckbScale } = this.data.info.udtToCkb;
-    const { ckbIn, udtIn } = this.getAmounts();
-
-    {
-      // Try to fulfill completely the order
-      const udtOut = ccc.Zero;
-      const ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
-      if (ckbIn + ckbAllowance >= ckbOut) {
-        return {
-          isFulfilled: true,
-          ckbOut,
-          udtOut,
-        };
-      }
-    }
-
-    {
-      // CKB allowance limits the order fulfillment
-      const ckbOut = ckbIn + ckbAllowance;
-      const udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
-      // DoS prevention: the equivalent of ckbMinMatch is the minimum partial match.
-      if (
-        udtIn * udtScale <
-        udtOut * udtScale + this.data.info.getCkbMinMatch() * ckbScale
-      ) {
-        throw Error("CKB Allowance too low");
-      }
-
-      return {
-        isFulfilled: false,
-        ckbOut,
-        udtOut,
-      };
-    }
-  }
-
-  partialsUdt2Ckb(ckbStep: ccc.FixedPoint): Match[] {
-    if (!this.isUdt2CkbMatchable() || !this.data.isValid()) {
+    //Check if allowance was too low to even fulfill partially
+    if (aOut + aMinMatch > aIn) {
       return [];
     }
 
-    const { ckbScale, udtScale } = this.data.info.udtToCkb;
-    const { ckbIn, udtIn } = this.getAmounts();
-
-    const minMatch = this.data.info.getCkbMinMatch() * ckbScale;
-    const udtMinOut = ccc.Zero;
-
     const result: Match[] = [];
-
-    // Try to fulfill completely the order
-    let isFulfilled = true;
-    let udtOut = udtMinOut;
-    let ckbOut = getNonDecreasing(udtScale, ckbScale, udtIn, ckbIn, udtOut);
-
-    {
-      // Equalize all steps
-      const ckbDelta = ckbOut - ckbIn;
-      const nSteps = (ckbDelta + ckbStep - 1n) / ckbStep;
-      ckbStep = ckbDelta / nSteps;
+    while (result.length < steps && aMin < aOut) {
+      result.push({ aOut, bOut, isFulfilled: false });
+      bOut += allowance;
+      aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
     }
 
-    let respectsCkbMinMatch = true;
-    while (respectsCkbMinMatch) {
-      result.push({ ckbOut, udtOut, isFulfilled });
-
-      // ckbOut limits the order fulfillment
-      isFulfilled = false;
-      ckbOut -= ckbStep;
-      udtOut = getNonDecreasing(ckbScale, udtScale, ckbIn, udtIn, ckbOut);
-      respectsCkbMinMatch = (udtIn - udtOut) * udtScale >= minMatch; // = getCkbMinMatch() * ckbScale
+    if (result.length >= steps) {
+      return result;
     }
 
-    return result.reverse();
+    //Check if order was over-fulfilled
+    if (aOut < aMin) {
+      aOut = aMin;
+      bOut = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
+    }
+    result.push({ aOut, bOut, isFulfilled: true });
+
+    return result;
   }
 
   // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19

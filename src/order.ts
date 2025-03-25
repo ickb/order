@@ -1,7 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative } from "./entities.js";
-import { OrderCell, OrderGroup, type Match } from "./cells.js";
+import { OrderCell, OrderGroup } from "./cells.js";
 
 export class Order {
   constructor(
@@ -86,9 +86,10 @@ export class Order {
       throw Error("Match impossible with incompatible cell");
     }
 
-    const { ckbOut, udtOut } = isCkb2Udt
-      ? o.matchCkb2Udt(allowance)
-      : o.matchUdt2Ckb(allowance);
+    const match = o.match(isCkb2Udt, allowance, 1)[0];
+    if (!match) {
+      throw Error("Unable to match order");
+    }
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
@@ -98,10 +99,10 @@ export class Order {
       {
         lock: this.script,
         type: this.udtHandler.script,
-        capacity: ckbOut,
+        capacity: isCkb2Udt ? match.aOut : match.bOut,
       },
       Data.from({
-        udtAmount: udtOut,
+        udtAmount: isCkb2Udt ? match.bOut : match.aOut,
         master: {
           type: "absolute",
           value: o.getMaster(),
@@ -111,55 +112,55 @@ export class Order {
     );
   }
 
-  partials(
-    orders: OrderCell[],
-    isCkb2Udt: boolean,
-    step: ccc.FixedPoint,
-  ): {
-    in: OrderCell;
-    out: Match & {
-      ckbGain: bigint;
-      udtGain: bigint;
-    };
-  }[][] {
-    const allPartials: {
-      in: OrderCell;
-      out: Match & {
-        ckbGain: bigint;
-        udtGain: bigint;
-      };
-    }[][] = [];
+  // partials(
+  //   orders: OrderCell[],
+  //   isCkb2Udt: boolean,
+  //   step: ccc.FixedPoint,
+  // ): {
+  //   in: OrderCell;
+  //   out: Match & {
+  //     ckbGain: bigint;
+  //     udtGain: bigint;
+  //   };
+  // }[][] {
+  //   const allPartials: {
+  //     in: OrderCell;
+  //     out: Match & {
+  //       ckbGain: bigint;
+  //       udtGain: bigint;
+  //     };
+  //   }[][] = [];
 
-    orders = isCkb2Udt
-      ? [...orders].sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
-      : [...orders].sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
+  //   orders = isCkb2Udt
+  //     ? [...orders].sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
+  //     : [...orders].sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
 
-    for (const order of orders) {
-      const { ckbIn, udtIn } = order.getAmounts();
-      const partials = (
-        isCkb2Udt ? order.partialsCkb2Udt(step) : order.partialsUdt2Ckb(step)
-      ).map((match) => ({
-        in: order,
-        out: {
-          ...match,
-          ckbGain: ckbIn - match.ckbOut,
-          udtGain: udtIn - match.udtOut,
-        },
-      }));
+  //   for (const order of orders) {
+  //     const { ckbIn, udtIn } = order.getAmounts();
+  //     const partials = (
+  //       isCkb2Udt ? order.partialsCkb2Udt(step) : order.partialsUdt2Ckb(step)
+  //     ).map((match) => ({
+  //       in: order,
+  //       out: {
+  //         ...match,
+  //         ckbGain: ckbIn - match.ckbOut,
+  //         udtGain: udtIn - match.udtOut,
+  //       },
+  //     }));
 
-      const first = partials[0];
-      if (
-        !first ||
-        (isCkb2Udt ? -first.out.udtGain : -first.out.ckbGain) > step // Minimal fulfillment is too big
-      ) {
-        continue;
-      }
+  //     const first = partials[0];
+  //     if (
+  //       !first ||
+  //       (isCkb2Udt ? -first.out.udtGain : -first.out.ckbGain) > step // Minimal fulfillment is too big
+  //     ) {
+  //       continue;
+  //     }
 
-      allPartials.push(partials);
-    }
+  //     allPartials.push(partials);
+  //   }
 
-    return allPartials;
-  }
+  //   return allPartials;
+  // }
 
   melt(tx: SmartTransaction, og: OrderGroup): void {
     if (!this.isOrder(og.order.cell)) {
