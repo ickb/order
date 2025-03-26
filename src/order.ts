@@ -114,55 +114,75 @@ export class Order {
     throw Error("Unable to match order");
   }
 
-  // partials(
-  //   orders: OrderCell[],
-  //   isCkb2Udt: boolean,
-  //   step: ccc.FixedPoint,
-  // ): {
-  //   in: OrderCell;
-  //   out: Match & {
-  //     ckbGain: bigint;
-  //     udtGain: bigint;
-  //   };
-  // }[][] {
-  //   const allPartials: {
-  //     in: OrderCell;
-  //     out: Match & {
-  //       ckbGain: bigint;
-  //       udtGain: bigint;
-  //     };
-  //   }[][] = [];
+  *partials(
+    orders: OrderCell[],
+    isCkb2Udt: boolean,
+    allowanceStep: ccc.FixedPoint,
+  ): Generator<
+    {
+      curr: {
+        aDelta: bigint;
+        bDelta: bigint;
+        matches: {
+          order: OrderCell;
+          aOut: ccc.FixedPoint;
+          bOut: ccc.FixedPoint;
+        }[];
+      };
+      next: {
+        aDelta: bigint;
+        bDelta: bigint;
+        matches: {
+          order: OrderCell;
+          aOut: ccc.FixedPoint;
+          bOut: ccc.FixedPoint;
+        }[];
+      };
+    },
+    void,
+    void
+  > {
+    orders = [...orders];
+    orders = isCkb2Udt
+      ? orders.sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
+      : orders.sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
 
-  //   orders = isCkb2Udt
-  //     ? [...orders].sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
-  //     : [...orders].sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
+    let acc = {
+      aDelta: ccc.Zero,
+      bDelta: ccc.Zero,
+      matches: [] as {
+        order: OrderCell;
+        aOut: ccc.FixedPoint;
+        bOut: ccc.FixedPoint;
+      }[],
+    };
 
-  //   for (const order of orders) {
-  //     const { ckbIn, udtIn } = order.getAmounts();
-  //     const partials = (
-  //       isCkb2Udt ? order.partialsCkb2Udt(step) : order.partialsUdt2Ckb(step)
-  //     ).map((match) => ({
-  //       in: order,
-  //       out: {
-  //         ...match,
-  //         ckbGain: ckbIn - match.ckbOut,
-  //         udtGain: udtIn - match.udtOut,
-  //       },
-  //     }));
+    let curr = acc;
 
-  //     const first = partials[0];
-  //     if (
-  //       !first ||
-  //       (isCkb2Udt ? -first.out.udtGain : -first.out.ckbGain) > step // Minimal fulfillment is too big
-  //     ) {
-  //       continue;
-  //     }
+    for (const order of orders) {
+      for (const m of order.match(isCkb2Udt, allowanceStep)) {
+        const next = {
+          aDelta: acc.aDelta + m.aDelta,
+          bDelta: acc.bDelta + m.bDelta,
+          matches: acc.matches.concat({
+            order,
+            aOut: m.aOut,
+            bOut: m.bOut,
+          }),
+        };
 
-  //     allPartials.push(partials);
-  //   }
+        yield { curr, next };
 
-  //   return allPartials;
-  // }
+        curr = next;
+      }
+
+      acc = curr;
+    }
+
+    yield { curr, next: curr };
+
+    return;
+  }
 
   melt(tx: SmartTransaction, og: OrderGroup): void {
     if (!this.isOrder(og.order.cell)) {
