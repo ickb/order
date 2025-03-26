@@ -1,12 +1,6 @@
 import { ccc, type FixedPoint } from "@ckb-ccc/core";
 import { Data } from "./entities.js";
 
-export interface Match {
-  isFulfilled: boolean;
-  aOut: ccc.FixedPoint;
-  bOut: ccc.FixedPoint;
-}
-
 export class OrderCell {
   constructor(
     public cell: ccc.Cell,
@@ -93,11 +87,20 @@ export class OrderCell {
     };
   }
 
-  match(
+  *match(
     isCkb2Udt: boolean,
     allowanceStep: ccc.FixedPoint,
-    maxSteps = Number.POSITIVE_INFINITY,
-  ): Match[] {
+  ): Generator<
+    {
+      aOut: bigint;
+      bOut: bigint;
+      aDelta: bigint;
+      bDelta: bigint;
+      isFulfilled: boolean;
+    },
+    void,
+    void
+  > {
     let aScale: ccc.Num;
     let bScale: ccc.Num;
     let aIn: ccc.FixedPoint;
@@ -117,43 +120,38 @@ export class OrderCell {
       aMin = ccc.Zero;
     }
 
-    if (
-      aIn <= aMin ||
-      aScale <= 0n ||
-      bScale <= 0n ||
-      allowanceStep <= 0 ||
-      maxSteps <= 0
-    ) {
-      return [];
+    if (aIn <= aMin || aScale <= 0n || bScale <= 0n || allowanceStep <= 0) {
+      return;
     }
 
     let bOut = bIn + allowanceStep;
-    let aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
+    let [aOut, bDelta, aDelta] = getNonDecreasing(
+      bScale,
+      aScale,
+      bIn,
+      aIn,
+      bOut,
+    );
 
     //Check if allowanceStep was too low to even fulfill partially
     if (aOut + aMinMatch > aIn) {
-      return [];
+      return;
     }
 
-    const result: Match[] = [];
-    while (result.length < maxSteps && aMin < aOut) {
-      result.push({ aOut, bOut, isFulfilled: false });
+    while (aMin < aOut) {
+      yield { aOut, bOut, aDelta, bDelta, isFulfilled: false };
+
       bOut += allowanceStep;
-      aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
-    }
-
-    if (result.length >= maxSteps) {
-      return result;
+      [aOut, bDelta, aDelta] = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
     }
 
     //Check if order was over-fulfilled
     if (aOut < aMin) {
       aOut = aMin;
-      bOut = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
+      [bOut, aDelta, bDelta] = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
     }
-    result.push({ aOut, bOut, isFulfilled: true });
 
-    return result;
+    yield { aOut, bOut, aDelta, bDelta, isFulfilled: true };
   }
 
   // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
@@ -232,8 +230,11 @@ function getNonDecreasing(
   aIn: ccc.FixedPoint,
   bIn: ccc.FixedPoint,
   aOut: ccc.FixedPoint,
-): ccc.FixedPoint {
-  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
+): [ccc.FixedPoint, ccc.FixedPoint, ccc.FixedPoint] {
+  const bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
+  const aDelta = aOut - aIn;
+  const bDelta = bOut - bIn;
+  return [bOut, aDelta, bDelta];
 }
 
 export class OrderGroup {

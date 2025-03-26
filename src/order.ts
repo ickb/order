@@ -86,30 +86,32 @@ export class Order {
       throw Error("Match impossible with incompatible cell");
     }
 
-    const match = o.match(isCkb2Udt, allowance, 1)[0];
-    if (!match) {
-      throw Error("Unable to match order");
+    for (const { aOut, bOut } of o.match(isCkb2Udt, allowance)) {
+      tx.addCellDeps(this.cellDeps);
+      tx.addUdtHandlers(this.udtHandler);
+
+      tx.addInput(o.cell);
+      tx.addOutput(
+        {
+          lock: this.script,
+          type: this.udtHandler.script,
+          capacity: isCkb2Udt ? aOut : bOut,
+        },
+        Data.from({
+          udtAmount: isCkb2Udt ? bOut : aOut,
+          master: {
+            type: "absolute",
+            value: o.getMaster(),
+          },
+          info: o.data.info,
+        }).toBytes(),
+      );
+
+      // Return at the first match
+      return;
     }
 
-    tx.addCellDeps(this.cellDeps);
-    tx.addUdtHandlers(this.udtHandler);
-
-    tx.addInput(o.cell);
-    tx.addOutput(
-      {
-        lock: this.script,
-        type: this.udtHandler.script,
-        capacity: isCkb2Udt ? match.aOut : match.bOut,
-      },
-      Data.from({
-        udtAmount: isCkb2Udt ? match.bOut : match.aOut,
-        master: {
-          type: "absolute",
-          value: o.getMaster(),
-        },
-        info: o.data.info,
-      }).toBytes(),
-    );
+    throw Error("Unable to match order");
   }
 
   // partials(
