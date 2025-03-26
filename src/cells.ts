@@ -95,8 +95,8 @@ export class OrderCell {
 
   match(
     isCkb2Udt: boolean,
-    allowance: ccc.FixedPoint,
-    steps = Number.POSITIVE_INFINITY,
+    allowanceStep: ccc.FixedPoint,
+    maxSteps = Number.POSITIVE_INFINITY,
   ): Match[] {
     let aScale: ccc.Num;
     let bScale: ccc.Num;
@@ -117,26 +117,32 @@ export class OrderCell {
       aMin = ccc.Zero;
     }
 
-    if (aIn <= aMin || aScale <= 0n || bScale <= 0n || steps <= 0) {
+    if (
+      aIn <= aMin ||
+      aScale <= 0n ||
+      bScale <= 0n ||
+      allowanceStep <= 0 ||
+      maxSteps <= 0
+    ) {
       return [];
     }
 
-    let bOut = bIn + allowance;
+    let bOut = bIn + allowanceStep;
     let aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
 
-    //Check if allowance was too low to even fulfill partially
+    //Check if allowanceStep was too low to even fulfill partially
     if (aOut + aMinMatch > aIn) {
       return [];
     }
 
     const result: Match[] = [];
-    while (result.length < steps && aMin < aOut) {
+    while (result.length < maxSteps && aMin < aOut) {
       result.push({ aOut, bOut, isFulfilled: false });
-      bOut += allowance;
+      bOut += allowanceStep;
       aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
     }
 
-    if (result.length >= steps) {
+    if (result.length >= maxSteps) {
       return result;
     }
 
