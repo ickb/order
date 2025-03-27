@@ -3,13 +3,27 @@ import type { SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative, type Ratio } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
 
+/**
+ * Utilities for managing UDT orders on Nervos L1 such as minting, matching, and melting.
+ */
 export class Order {
+  /**
+   * Creates an instance of Order.
+   * @param script - The script associated with the order.
+   * @param cellDeps - The cell dependencies for the order.
+   * @param udtHandler - The handler for UDT (User Defined Token).
+   */
   constructor(
     public script: ccc.Script,
     public cellDeps: ccc.CellDep[],
     public udtHandler: UdtHandler,
   ) {}
 
+  /**
+   * Checks if the given cell is an order.
+   * @param cell - The cell to check.
+   * @returns True if the cell is an order, otherwise false.
+   */
   isOrder(cell: ccc.Cell): boolean {
     return (
       cell.cellOutput.lock.eq(this.script) &&
@@ -17,15 +31,28 @@ export class Order {
     );
   }
 
+  /**
+   * Checks if the given cell is a master cell.
+   * @param cell - The cell to check.
+   * @returns True if the cell is a master, otherwise false.
+   */
   isMaster(cell: ccc.Cell): boolean {
     return Boolean(cell.cellOutput.type?.eq(this.script));
   }
 
+  /**
+   * Mints a new order cell and appends it to the transaction.
+   * @param tx - The transaction to which the order will be added.
+   * @param lock - The lock script for the master cell.
+   * @param info - The information related to the order.
+   * @param ckbAmount - The amount of CKB to allocate for the order.
+   * @param udtAmount - The amount of UDT to allocate for the order.
+   */
   mint(
     tx: SmartTransaction,
     lock: ccc.Script,
     info: Info,
-    ckbAmount: ccc.FixedPoint, //it will use way more CKB than expressed in ckbAmount
+    ckbAmount: ccc.FixedPoint, // it will use way more CKB than expressed in ckbAmount
     udtAmount: ccc.FixedPoint,
   ): void {
     const data = Data.from({
@@ -60,6 +87,12 @@ export class Order {
     });
   }
 
+  /**
+   * Matches a CKB to UDT order.
+   * @param tx - The transaction to which the match will be added.
+   * @param order - The order cell to match against.
+   * @param udtAllowance - The allowance for UDT.
+   */
   matchCkb2Udt(
     tx: SmartTransaction,
     order: OrderCell,
@@ -68,6 +101,12 @@ export class Order {
     this.match(tx, order, true, udtAllowance);
   }
 
+  /**
+   * Matches a UDT to CKB order.
+   * @param tx - The transaction to which the match will be added.
+   * @param order - The order cell to match against.
+   * @param ckbAllowance - The allowance for CKB.
+   */
   matchUdt2Ckb(
     tx: SmartTransaction,
     order: OrderCell,
@@ -76,6 +115,14 @@ export class Order {
     this.match(tx, order, false, ckbAllowance);
   }
 
+  /**
+   * Matches the order with the specified parameters.
+   * @param tx - The transaction to which the match will be added.
+   * @param order - The order cell to match against.
+   * @param isCkb2Udt - Indicates if the match is in the CKB to UDT direction or vice versa.
+   * @param allowance - The allowance for matching.
+   * @throws Will throw an error if the order is incompatible.
+   */
   private match(
     tx: SmartTransaction,
     order: OrderCell,
@@ -95,6 +142,11 @@ export class Order {
     throw Error("Unable to match order");
   }
 
+  /**
+   * Processes the raw match results and adds them to the transaction.
+   * @param tx - The transaction to which the matches will be added.
+   * @param matches - The matches to process.
+   */
   private rawMatch(tx: SmartTransaction, matches: Partial["matches"]): void {
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
@@ -119,6 +171,13 @@ export class Order {
     }
   }
 
+  /**
+   * Finds the best match for the given orders based on the current rate.
+   * @param tx - The transaction to which the best match will be added.
+   * @param orders - The list of order cells to consider for matching.
+   * @param currentRate - The current exchange rate between CKB and UDT.
+   * @param options - Optional parameters for matching.
+   */
   bestMatch(
     tx: SmartTransaction,
     orders: OrderCell[],
@@ -131,7 +190,7 @@ export class Order {
   ): void {
     const { ckbScale, udtScale } = currentRate;
     const ckbMinGain = options?.minCkbGain ?? ccc.Zero;
-    const feeRate = options?.minCkbGain ?? ccc.Zero;
+    const feeRate = options?.feeRate ?? 1000; // Base fee rate
     const ckbAllowanceStep =
       options?.ckbAllowanceStep ?? ccc.fixedPointFrom(1000); // 1000 CKB
     const udtAllowanceStep =
@@ -186,6 +245,13 @@ export class Order {
     }
   }
 
+  /**
+   * Generates partial match results for the given orders.
+   * @param orders - The list of order cells to consider for matching.
+   * @param isCkb2Udt - Indicates if the match is in the CKB to UDT direction or vice versa.
+   * @param allowanceStep - The allowance for matching.
+   * @returns A generator yielding partial match results.
+   */
   *partials(
     orders: OrderCell[],
     isCkb2Udt: boolean,
@@ -224,6 +290,12 @@ export class Order {
     }
   }
 
+  /**
+   * Melts the specified order group, removing it from the transaction.
+   * @param tx - The transaction to which the group will be added.
+   * @param group - The order group to melt.
+   * @throws Will throw an error if the order is incompatible.
+   */
   melt(tx: SmartTransaction, group: OrderGroup): void {
     if (!this.isOrder(group.order.cell)) {
       throw Error("Melt impossible with incompatible cell");
@@ -238,6 +310,11 @@ export class Order {
     tx.addInput(group.master);
   }
 
+  /**
+   * Finds orders associated with the current order instance.
+   * @param client - The client used to interact with the blockchain.
+   * @returns A promise that resolves to an array of OrderGroup instances.
+   */
   async findOrders(client: ccc.Client): Promise<OrderGroup[]> {
     const [simpleOrders, allMasters] = await Promise.all([
       this.findSimpleOrders(client),
@@ -298,6 +375,11 @@ export class Order {
     return result;
   }
 
+  /**
+   * Finds simple orders on the blockchain.
+   * @param client - The client used to interact with the blockchain.
+   * @returns A promise that resolves to an array of OrderCell instances.
+   */
   private async findSimpleOrders(client: ccc.Client): Promise<OrderCell[]> {
     const orders: OrderCell[] = [];
     for await (const cell of client.findCellsOnChain(
@@ -322,6 +404,11 @@ export class Order {
     return orders;
   }
 
+  /**
+   * Finds all master cells on the blockchain.
+   * @param client - The client used to interact with the blockchain.
+   * @returns A promise that resolves to an array of master cells.
+   */
   private async findAllMasters(client: ccc.Client): Promise<ccc.Cell[]> {
     const masters: ccc.Cell[] = [];
     for await (const cell of client.findCellsOnChain(
@@ -342,6 +429,12 @@ export class Order {
     return masters;
   }
 
+  /**
+   * Finds the origin order associated with a given master out point.
+   * @param client - The client used to interact with the blockchain.
+   * @param master - The master out point to find the origin for.
+   * @returns A promise that resolves to the origin OrderCell or undefined if not found.
+   */
   private async findOrigin(
     client: ccc.Client,
     master: ccc.OutPoint,
@@ -374,19 +467,30 @@ export class Order {
   }
 }
 
+/**
+ * Represents a partial match result for an order.
+ */
 interface Partial {
-  ckbDelta: bigint;
-  udtDelta: bigint;
+  ckbDelta: bigint; // The change in CKB for the match.
+  udtDelta: bigint; // The change in UDT for the match.
   matches: {
-    order: OrderCell;
-    ckbOut: ccc.FixedPoint;
-    udtOut: ccc.FixedPoint;
+    order: OrderCell; // The order cell involved in the match.
+    ckbOut: ccc.FixedPoint; // The output amount of CKB.
+    udtOut: ccc.FixedPoint; // The output amount of UDT.
   }[];
 }
 
+/**
+ * A buffered generator that tries to maintain a fixed-size buffer of values.
+ */
 class Buffered<T> {
   public buffer: T[] = [];
 
+  /**
+   * Creates an instance of Buffered.
+   * @param generator - The generator to buffer values from.
+   * @param maxSize - The maximum size of the buffer.
+   */
   constructor(
     public generator: Generator<T, void, void>,
     public maxSize: number,
@@ -400,6 +504,10 @@ class Buffered<T> {
     }
   }
 
+  /**
+   * Advances the buffer by the specified number of steps.
+   * @param n - The number of steps to advance the buffer.
+   */
   public next(n: number): void {
     for (let i = 0; i < n; i++) {
       this.buffer.shift();

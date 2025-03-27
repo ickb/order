@@ -1,7 +1,19 @@
 import { ccc, type FixedPoint } from "@ckb-ccc/core";
 import { Data } from "./entities.js";
 
+/**
+ * Represents an order cell in the system.
+ */
 export class OrderCell {
+  /**
+   * Creates an instance of OrderCell.
+   * @param cell - The cell associated with the order.
+   * @param data - The data related to the order.
+   * @param ckbOccupied - The amount of CKB occupied by the order.
+   * @param ckbUnoccupied - The amount of CKB unoccupied by the order.
+   * @param absTotal - The absolute total value of the order.
+   * @param absProgress - The absolute progress of the order.
+   */
   constructor(
     public cell: ccc.Cell,
     public data: Data,
@@ -11,6 +23,11 @@ export class OrderCell {
     public absProgress: ccc.Num,
   ) {}
 
+  /**
+   * Tries to create an OrderCell from a given cell.
+   * @param cell - The cell to create the OrderCell from.
+   * @returns An OrderCell instance or undefined if creation fails.
+   */
   static tryFrom(cell: ccc.Cell): OrderCell | undefined {
     try {
       return OrderCell.mustFrom(cell);
@@ -19,6 +36,12 @@ export class OrderCell {
     }
   }
 
+  /**
+   * Creates an OrderCell from a given cell, throwing an error if the cell is invalid.
+   * @param cell - The cell to create the OrderCell from.
+   * @returns An OrderCell instance.
+   * @throws Will throw an error if the cell is invalid.
+   */
   static mustFrom(cell: ccc.Cell): OrderCell {
     const data = Data.decode(cell.outputData);
     data.validate();
@@ -64,22 +87,42 @@ export class OrderCell {
     );
   }
 
+  /**
+   * Checks if the order can be matched as a CKB to UDT order.
+   * @returns True if the order is matchable as CKB to UDT, otherwise false.
+   */
   isCkb2UdtMatchable(): boolean {
     return this.data.info.isCkb2Udt() && this.ckbUnoccupied > 0n;
   }
 
+  /**
+   * Checks if the order can be matched as a UDT to CKB order.
+   * @returns True if the order is matchable as UDT to CKB, otherwise false.
+   */
   isUdt2CkbMatchable(): boolean {
     return this.data.info.isUdt2Ckb() && this.data.udtAmount > 0n;
   }
 
+  /**
+   * Checks if the order is matchable in any way.
+   * @returns True if the order is matchable, otherwise false.
+   */
   isMatchable(): boolean {
     return this.isCkb2UdtMatchable() || this.isUdt2CkbMatchable();
   }
 
+  /**
+   * Retrieves the master out point of the order.
+   * @returns The master out point associated with the order.
+   */
   getMaster(): ccc.OutPoint {
     return this.data.getMaster(this.cell.outPoint);
   }
 
+  /**
+   * Gets the amounts of CKB and UDT in the order.
+   * @returns An object containing the CKB and UDT amounts.
+   */
   getAmounts(): { ckbIn: ccc.FixedPoint; udtIn: ccc.FixedPoint } {
     return {
       ckbIn: this.cell.cellOutput.capacity,
@@ -87,6 +130,12 @@ export class OrderCell {
     };
   }
 
+  /**
+   * Matches the order based on the specified parameters.
+   * @param isCkb2Udt - Indicates if the match is for CKB to UDT.
+   * @param allowanceStep - The step allowance for matching.
+   * @returns A generator yielding match results.
+   */
   *match(
     isCkb2Udt: boolean,
     allowanceStep: ccc.FixedPoint,
@@ -100,6 +149,7 @@ export class OrderCell {
     let aMinMatch: ccc.FixedPoint;
     let aMin: FixedPoint;
     let newMatch: () => Match;
+
     if (isCkb2Udt) {
       ({ ckbScale: aScale, udtScale: bScale } = this.data.info.ckbToUdt);
       ({ ckbIn: aIn, udtIn: bIn } = this.getAmounts());
@@ -134,7 +184,7 @@ export class OrderCell {
     bOut = bIn + allowanceStep;
     aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
 
-    //Check if allowanceStep was too low to even fulfill partially
+    // Check if allowanceStep was too low to even fulfill partially
     if (aOut + aMinMatch > aIn) {
       return;
     }
@@ -146,7 +196,7 @@ export class OrderCell {
       aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
     }
 
-    //Check if order was over-fulfilled
+    // Check if order was over-fulfilled
     if (aOut < aMin) {
       // Fulfill fully the order
       aOut = aMin;
@@ -156,7 +206,12 @@ export class OrderCell {
     yield newMatch();
   }
 
-  // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+  /**
+   * Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+   * Validates the order against a descendant order.
+   * @param descendant - The descendant order to validate against.
+   * @throws Will throw an error if validation fails.
+   */
   validate(descendant: OrderCell): void {
     // Same cell, nothing to check
     if (this.cell.outPoint.eq(descendant.cell.outPoint)) {
@@ -189,6 +244,11 @@ export class OrderCell {
     }
   }
 
+  /**
+   * Checks if the descendant order is valid against this order.
+   * @param descendant - The descendant order to validate.
+   * @returns True if the descendant is valid, otherwise false.
+   */
   isValid(descendant: OrderCell): boolean {
     try {
       this.validate(descendant);
@@ -198,7 +258,12 @@ export class OrderCell {
     }
   }
 
-  // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+  /**
+   * Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
+   * Resolves the best descendant order from a list of descendants.
+   * @param descendants - The list of descendant orders to resolve.
+   * @returns The best matching descendant order or undefined if none is valid.
+   */
   resolve(descendants: OrderCell[]): OrderCell | undefined {
     let best: OrderCell | undefined = undefined;
     for (const descendant of descendants) {
@@ -220,37 +285,40 @@ export class OrderCell {
   }
 }
 
+/**
+ * Represents a match result between orders.
+ */
 export interface Match {
-  ckbOut: ccc.FixedPoint;
-  udtOut: ccc.FixedPoint;
-  ckbDelta: ccc.FixedPoint;
-  udtDelta: ccc.FixedPoint;
-  isFulfilled: boolean;
+  ckbOut: ccc.FixedPoint; // The amount of CKB output.
+  udtOut: ccc.FixedPoint; // The amount of UDT output.
+  ckbDelta: ccc.FixedPoint; // The change in CKB.
+  udtDelta: ccc.FixedPoint; // The change in UDT.
+  isFulfilled: boolean; // Indicates if the match is fulfilled.
 }
 
-// Apply limit order rule on non decreasing value to calculate bOut:
-// min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
-// bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
-// But integer divisions truncate, so we need to round to the upper value
-// bOut = (aScale * (aIn - aOut) + bScale * bIn + bScale - 1) / bScale
-// bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1) - 1) / bScale
-function getNonDecreasing(
-  aScale: ccc.Num,
-  bScale: ccc.Num,
-  aIn: ccc.FixedPoint,
-  bIn: ccc.FixedPoint,
-  aOut: ccc.FixedPoint,
-): ccc.FixedPoint {
-  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
-}
-
+/**
+ * Represents a group of orders associated with a master cell.
+ */
 export class OrderGroup {
+  /**
+   * Creates an instance of OrderGroup.
+   * @param master - The master cell associated with the order group.
+   * @param order - The order within the group.
+   * @param origin - The original order associated with the group.
+   */
   constructor(
     public master: ccc.Cell,
     public order: OrderCell,
     public origin: OrderCell,
   ) {}
 
+  /**
+   * Tries to create an OrderGroup from the provided parameters.
+   * @param master - The master cell.
+   * @param order - The order within the group.
+   * @param origin - The original order.
+   * @returns An OrderGroup instance or undefined if creation fails.
+   */
   static tryFrom(
     master: ccc.Cell,
     order: OrderCell,
@@ -263,6 +331,10 @@ export class OrderGroup {
     return undefined;
   }
 
+  /**
+   * Validates the order group against its master and origin orders.
+   * @throws Will throw an error if validation fails.
+   */
   validate(): void {
     if (!this.master.cellOutput.type?.eq(this.order.cell.cellOutput.lock)) {
       throw Error("Order script different");
@@ -275,6 +347,10 @@ export class OrderGroup {
     this.origin.validate(this.order);
   }
 
+  /**
+   * Checks if the order group is valid.
+   * @returns True if the order group is valid, otherwise false.
+   */
   isValid(): boolean {
     try {
       this.validate();
@@ -284,7 +360,34 @@ export class OrderGroup {
     }
   }
 
+  /**
+   * Checks if the specified lock is the owner of the master cell.
+   * @param lock - The lock to check ownership against.
+   * @returns True if the lock is the owner, otherwise false.
+   */
+  /**
+   * Checks if the specified lock is the owner of the master cell.
+   * @param lock - The lock to check ownership against.
+   * @returns True if the lock is the owner, otherwise false.
+   */
   isOwner(lock: ccc.ScriptLike): boolean {
     return this.master.cellOutput.lock.eq(lock);
   }
+}
+
+/**
+ * Applies limit order rule on non-decreasing value to calculate bOut:
+ * min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
+ * bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
+ * But integer divisions truncate, so we need to round to the upper value
+ * bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1) - 1) / bScale
+ */
+function getNonDecreasing(
+  aScale: ccc.Num,
+  bScale: ccc.Num,
+  aIn: ccc.FixedPoint,
+  bIn: ccc.FixedPoint,
+  aOut: ccc.FixedPoint,
+): ccc.FixedPoint {
+  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
 }
