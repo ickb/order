@@ -90,48 +90,49 @@ export class OrderCell {
   *match(
     isCkb2Udt: boolean,
     allowanceStep: ccc.FixedPoint,
-  ): Generator<
-    {
-      aOut: bigint;
-      bOut: bigint;
-      aDelta: bigint;
-      bDelta: bigint;
-      isFulfilled: boolean;
-    },
-    void,
-    void
-  > {
+  ): Generator<Match, void, void> {
     let aScale: ccc.Num;
     let bScale: ccc.Num;
     let aIn: ccc.FixedPoint;
     let bIn: ccc.FixedPoint;
+    let aOut: ccc.FixedPoint;
+    let bOut: ccc.FixedPoint;
     let aMinMatch: ccc.FixedPoint;
     let aMin: FixedPoint;
+    let newMatch: () => Match;
     if (isCkb2Udt) {
       ({ ckbScale: aScale, udtScale: bScale } = this.data.info.ckbToUdt);
       ({ ckbIn: aIn, udtIn: bIn } = this.getAmounts());
       aMinMatch = this.data.info.getCkbMinMatch();
       aMin = this.ckbOccupied;
+      newMatch = (): Match => ({
+        ckbOut: aOut,
+        udtOut: bOut,
+        ckbDelta: aOut - aIn,
+        udtDelta: bOut - bIn,
+        isFulfilled: aOut === aMin,
+      });
     } else {
       ({ ckbScale: bScale, udtScale: aScale } = this.data.info.ckbToUdt);
       ({ ckbIn: bIn, udtIn: aIn } = this.getAmounts());
       aMinMatch =
         (this.data.info.getCkbMinMatch() * bScale + aScale - 1n) / aScale;
       aMin = ccc.Zero;
+      newMatch = (): Match => ({
+        ckbOut: bOut,
+        udtOut: aOut,
+        ckbDelta: bOut - bIn,
+        udtDelta: aOut - aIn,
+        isFulfilled: aOut === aMin,
+      });
     }
 
     if (aIn <= aMin || aScale <= 0n || bScale <= 0n || allowanceStep <= 0) {
       return;
     }
 
-    let bOut = bIn + allowanceStep;
-    let [aOut, bDelta, aDelta] = getNonDecreasing(
-      bScale,
-      aScale,
-      bIn,
-      aIn,
-      bOut,
-    );
+    bOut = bIn + allowanceStep;
+    aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
 
     //Check if allowanceStep was too low to even fulfill partially
     if (aOut + aMinMatch > aIn) {
@@ -139,19 +140,20 @@ export class OrderCell {
     }
 
     while (aMin < aOut) {
-      yield { aOut, bOut, aDelta, bDelta, isFulfilled: false };
+      yield newMatch();
 
       bOut += allowanceStep;
-      [aOut, bDelta, aDelta] = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
+      aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
     }
 
     //Check if order was over-fulfilled
     if (aOut < aMin) {
+      // Fulfill fully the order
       aOut = aMin;
-      [bOut, aDelta, bDelta] = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
+      bOut = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
     }
 
-    yield { aOut, bOut, aDelta, bDelta, isFulfilled: true };
+    yield newMatch();
   }
 
   // Countermeasure to Confusion Attack https://github.com/ickb/whitepaper/issues/19
@@ -218,6 +220,14 @@ export class OrderCell {
   }
 }
 
+export interface Match {
+  ckbOut: ccc.FixedPoint;
+  udtOut: ccc.FixedPoint;
+  ckbDelta: ccc.FixedPoint;
+  udtDelta: ccc.FixedPoint;
+  isFulfilled: boolean;
+}
+
 // Apply limit order rule on non decreasing value to calculate bOut:
 // min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
 // bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
@@ -230,11 +240,8 @@ function getNonDecreasing(
   aIn: ccc.FixedPoint,
   bIn: ccc.FixedPoint,
   aOut: ccc.FixedPoint,
-): [ccc.FixedPoint, ccc.FixedPoint, ccc.FixedPoint] {
-  const bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
-  const aDelta = aOut - aIn;
-  const bDelta = bOut - bIn;
-  return [bOut, aDelta, bDelta];
+): ccc.FixedPoint {
+  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
 }
 
 export class OrderGroup {

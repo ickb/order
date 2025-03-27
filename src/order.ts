@@ -86,7 +86,7 @@ export class Order {
       throw Error("Match impossible with incompatible cell");
     }
 
-    for (const { aOut, bOut } of o.match(isCkb2Udt, allowance)) {
+    for (const { ckbOut, udtOut } of o.match(isCkb2Udt, allowance)) {
       tx.addCellDeps(this.cellDeps);
       tx.addUdtHandlers(this.udtHandler);
 
@@ -95,10 +95,10 @@ export class Order {
         {
           lock: this.script,
           type: this.udtHandler.script,
-          capacity: isCkb2Udt ? aOut : bOut,
+          capacity: ckbOut,
         },
         Data.from({
-          udtAmount: isCkb2Udt ? bOut : aOut,
+          udtAmount: udtOut,
           master: {
             type: "absolute",
             value: o.getMaster(),
@@ -118,43 +118,16 @@ export class Order {
     orders: OrderCell[],
     isCkb2Udt: boolean,
     allowanceStep: ccc.FixedPoint,
-  ): Generator<
-    {
-      curr: {
-        aDelta: bigint;
-        bDelta: bigint;
-        matches: {
-          order: OrderCell;
-          aOut: ccc.FixedPoint;
-          bOut: ccc.FixedPoint;
-        }[];
-      };
-      next: {
-        aDelta: bigint;
-        bDelta: bigint;
-        matches: {
-          order: OrderCell;
-          aOut: ccc.FixedPoint;
-          bOut: ccc.FixedPoint;
-        }[];
-      };
-    },
-    void,
-    void
-  > {
+  ): Generator<[Partial, Partial], void, void> {
     orders = [...orders];
     orders = isCkb2Udt
       ? orders.sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
       : orders.sort((a, b) => a.data.info.udt2CkbCompare(b.data.info));
 
-    let acc = {
-      aDelta: ccc.Zero,
-      bDelta: ccc.Zero,
-      matches: [] as {
-        order: OrderCell;
-        aOut: ccc.FixedPoint;
-        bOut: ccc.FixedPoint;
-      }[],
+    let acc: Partial = {
+      ckbDelta: ccc.Zero,
+      udtDelta: ccc.Zero,
+      matches: [],
     };
 
     let curr = acc;
@@ -162,16 +135,16 @@ export class Order {
     for (const order of orders) {
       for (const m of order.match(isCkb2Udt, allowanceStep)) {
         const next = {
-          aDelta: acc.aDelta + m.aDelta,
-          bDelta: acc.bDelta + m.bDelta,
+          ckbDelta: acc.ckbDelta + m.ckbDelta,
+          udtDelta: acc.udtDelta + m.udtDelta,
           matches: acc.matches.concat({
             order,
-            aOut: m.aOut,
-            bOut: m.bOut,
+            ckbOut: m.ckbOut,
+            udtOut: m.udtOut,
           }),
         };
 
-        yield { curr, next };
+        yield [curr, next];
 
         curr = next;
       }
@@ -179,9 +152,7 @@ export class Order {
       acc = curr;
     }
 
-    yield { curr, next: curr };
-
-    return;
+    yield [curr, curr];
   }
 
   melt(tx: SmartTransaction, og: OrderGroup): void {
@@ -332,4 +303,14 @@ export class Order {
       }
     }
   }
+}
+
+interface Partial {
+  ckbDelta: bigint;
+  udtDelta: bigint;
+  matches: {
+    order: OrderCell;
+    ckbOut: ccc.FixedPoint;
+    udtOut: ccc.FixedPoint;
+  }[];
 }
