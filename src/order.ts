@@ -1,6 +1,6 @@
 import { ccc } from "@ckb-ccc/core";
 import type { SmartTransaction, UdtHandler } from "@ickb/dao";
-import { Data, Info, Relative } from "./entities.js";
+import { Data, Info, Relative, type Ratio } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
 
 export class Order {
@@ -62,35 +62,45 @@ export class Order {
 
   matchCkb2Udt(
     tx: SmartTransaction,
-    o: OrderCell,
+    order: OrderCell,
     udtAllowance: ccc.FixedPoint,
   ): void {
-    this.match(tx, o, true, udtAllowance);
+    this.match(tx, order, true, udtAllowance);
   }
 
   matchUdt2Ckb(
     tx: SmartTransaction,
-    o: OrderCell,
+    order: OrderCell,
     ckbAllowance: ccc.FixedPoint,
   ): void {
-    this.match(tx, o, false, ckbAllowance);
+    this.match(tx, order, false, ckbAllowance);
   }
 
   private match(
     tx: SmartTransaction,
-    o: OrderCell,
+    order: OrderCell,
     isCkb2Udt: boolean,
     allowance: ccc.FixedPoint,
   ): void {
-    if (!this.isOrder(o.cell)) {
+    if (!this.isOrder(order.cell)) {
       throw Error("Match impossible with incompatible cell");
     }
 
-    for (const { ckbOut, udtOut } of o.match(isCkb2Udt, allowance)) {
-      tx.addCellDeps(this.cellDeps);
-      tx.addUdtHandlers(this.udtHandler);
+    for (const { ckbOut, udtOut } of order.match(isCkb2Udt, allowance)) {
+      // Return at the first match
+      this.rawMatch(tx, [{ order, ckbOut, udtOut }]);
+      return;
+    }
 
-      tx.addInput(o.cell);
+    throw Error("Unable to match order");
+  }
+
+  private rawMatch(tx: SmartTransaction, matches: Partial["matches"]): void {
+    tx.addCellDeps(this.cellDeps);
+    tx.addUdtHandlers(this.udtHandler);
+
+    for (const { order, ckbOut, udtOut } of matches) {
+      tx.addInput(order.cell);
       tx.addOutput(
         {
           lock: this.script,
@@ -101,24 +111,86 @@ export class Order {
           udtAmount: udtOut,
           master: {
             type: "absolute",
-            value: o.getMaster(),
+            value: order.getMaster(),
           },
-          info: o.data.info,
+          info: order.data.info,
         }).toBytes(),
       );
+    }
+  }
 
-      // Return at the first match
+  bestMatch(
+    tx: SmartTransaction,
+    orders: OrderCell[],
+    currentRate: Ratio,
+    options?: {
+      minCkbGain?: ccc.FixedPoint;
+      feeRate?: number;
+      ckbAllowanceStep?: ccc.FixedPoint;
+    },
+  ): void {
+    const { ckbScale, udtScale } = currentRate;
+    const ckbMinGain = options?.minCkbGain ?? ccc.Zero;
+    const feeRate = options?.minCkbGain ?? ccc.Zero;
+    const ckbAllowanceStep =
+      options?.ckbAllowanceStep ?? ccc.fixedPointFrom(1000); // 1000 CKB
+    const udtAllowanceStep =
+      (ckbAllowanceStep * ckbScale + udtScale - 1n) / udtScale;
+
+    const ckb2UdtPartials = new Buffered(
+      this.partials(orders, true, ckbAllowanceStep),
+      2,
+    );
+    const udt2CkbPartials = new Buffered(
+      this.partials(orders, false, udtAllowanceStep),
+      2,
+    );
+
+    let best = {
+      i: -1,
+      j: -1,
+      cost: 1n << 256n,
+      matches: [] as Partial["matches"],
+    };
+    while (best.i !== 0 && best.j !== 0) {
+      ckb2UdtPartials.next(best.i);
+      udt2CkbPartials.next(best.j);
+      best.i = 0;
+      best.j = 0;
+
+      for (const [i, c2u] of ckb2UdtPartials.buffer.entries()) {
+        for (const [j, u2c] of udt2CkbPartials.buffer.entries()) {
+          const curr = {
+            i,
+            j,
+            cost:
+              (c2u.ckbDelta + u2c.ckbDelta) * ckbScale +
+              (c2u.udtDelta + u2c.udtDelta) * udtScale,
+            matches: c2u.matches.concat(u2c.matches),
+          };
+          if (curr.cost < best.cost) {
+            best = curr;
+          }
+        }
+      }
+    }
+
+    if (best.matches.length === 0) {
       return;
     }
 
-    throw Error("Unable to match order");
+    const txClone = tx.clone();
+    this.rawMatch(txClone, best.matches);
+    if (ckbMinGain <= -best.cost - txClone.estimateFee(feeRate)) {
+      tx.copy(txClone);
+    }
   }
 
   *partials(
     orders: OrderCell[],
     isCkb2Udt: boolean,
     allowanceStep: ccc.FixedPoint,
-  ): Generator<[Partial, Partial], void, void> {
+  ): Generator<Partial, void, void> {
     orders = [...orders];
     orders = isCkb2Udt
       ? orders.sort((a, b) => a.data.info.ckb2UdtCompare(b.data.info))
@@ -131,10 +203,11 @@ export class Order {
     };
 
     let curr = acc;
+    yield curr;
 
     for (const order of orders) {
       for (const m of order.match(isCkb2Udt, allowanceStep)) {
-        const next = {
+        curr = {
           ckbDelta: acc.ckbDelta + m.ckbDelta,
           udtDelta: acc.udtDelta + m.udtDelta,
           matches: acc.matches.concat({
@@ -144,29 +217,25 @@ export class Order {
           }),
         };
 
-        yield [curr, next];
-
-        curr = next;
+        yield curr;
       }
 
       acc = curr;
     }
-
-    yield [curr, curr];
   }
 
-  melt(tx: SmartTransaction, og: OrderGroup): void {
-    if (!this.isOrder(og.order.cell)) {
+  melt(tx: SmartTransaction, group: OrderGroup): void {
+    if (!this.isOrder(group.order.cell)) {
       throw Error("Melt impossible with incompatible cell");
     }
 
-    og.validate();
+    group.validate();
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
 
-    tx.addInput(og.order.cell);
-    tx.addInput(og.master);
+    tx.addInput(group.order.cell);
+    tx.addInput(group.master);
   }
 
   async findOrders(client: ccc.Client): Promise<OrderGroup[]> {
@@ -313,4 +382,31 @@ interface Partial {
     ckbOut: ccc.FixedPoint;
     udtOut: ccc.FixedPoint;
   }[];
+}
+
+class Buffered<T> {
+  public buffer: T[] = [];
+
+  constructor(
+    public generator: Generator<T, void, void>,
+    public maxSize: number,
+  ) {
+    // Try to populate the buffer
+    for (const value of generator) {
+      this.buffer.push(value);
+      if (this.buffer.length >= this.maxSize) {
+        break;
+      }
+    }
+  }
+
+  public next(n: number): void {
+    for (let i = 0; i < n; i++) {
+      this.buffer.shift();
+      const { value, done } = this.generator.next();
+      if (!done) {
+        this.buffer.push(value);
+      }
+    }
+  }
 }
