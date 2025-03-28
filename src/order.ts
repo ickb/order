@@ -240,7 +240,7 @@ export class Order {
 
     const txClone = tx.clone();
     this.rawMatch(txClone, best.matches);
-    if (ckbMinGain <= -best.cost - txClone.estimateFee(feeRate)) {
+    if (-best.cost >= (ckbMinGain + txClone.estimateFee(feeRate)) * ckbScale) {
       tx.copy(txClone);
     }
   }
