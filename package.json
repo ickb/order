@@ -1,6 +1,6 @@
 {
   "name": "@ickb/order",
-  "version": "1000.0.10",
+  "version": "1000.0.11",
   "description": "UDT Limit Order utilities built on top of CCC",
   "author": "phroi",
   "license": "MIT",
@@ -18,7 +18,8 @@
     "build": "pnpm run build:esm && pnpm run build:cjs && node dist/cjs/index.js",
     "build:esm": "tsc",
     "build:cjs": "tsc --module commonjs --outDir dist/cjs",
-    "lint": "eslint ./src"
+    "lint": "eslint ./src",
+    "up2lint": "rm pnpm-lock.yaml && pnpm up && pnpm build && pnpm lint"
   },
   "files": [
     "/dist",
@@ -29,14 +30,14 @@
     "provenance": true
   },
   "devDependencies": {
-    "@eslint/js": "^9.23.0",
-    "eslint": "^9.23.0",
+    "@eslint/js": "^9.25.0",
+    "eslint": "^9.25.0",
     "prettier": "^3.5.3",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.28.0"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.1"
   },
   "dependencies": {
     "@ckb-ccc/core": "^1.8.0",
-    "@ickb/dao": "^1000.0.9"
+    "@ickb/dao": "^1000.0.10"
   }
 }

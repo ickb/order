@@ -1,12 +1,12 @@
 import { ccc } from "@ckb-ccc/core";
-import type { SmartTransaction, UdtHandler } from "@ickb/dao";
+import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/dao";
 import { Data, Info, Relative, type Ratio } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
 
 /**
  * Utilities for managing UDT orders on Nervos L1 such as minting, matching, and melting.
  */
-export class Order {
+export class Order implements ScriptDeps {
   /**
    * Creates an instance of Order.
    * @param script - The script associated with the order.
@@ -18,6 +18,15 @@ export class Order {
     public cellDeps: ccc.CellDep[],
     public udtHandler: UdtHandler,
   ) {}
+
+  /**
+   * Returns a new instance of Order.
+   *
+   * @returns A new instance of Order.
+   */
+  static from(c: ScriptDeps, udtHandler: UdtHandler): Order {
+    return new Order(c.script, c.cellDeps, udtHandler);
+  }
 
   /**
    * Checks if the given cell is an order.
