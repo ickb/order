@@ -12,8 +12,8 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0(typescript@5.8.3)
       '@ickb/dao':
-        specifier: ^1000.0.10
-        version: 1000.0.10(typescript@5.8.3)
+        specifier: ^1000.0.12
+        version: 1000.0.12(typescript@5.8.3)
     devDependencies:
       '@eslint/js':
         specifier: ^9.25.0
@@ -97,8 +97,8 @@ packages:
     resolution: {integrity: sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ==}
     engines: {node: '>=18.18'}
 
-  '@ickb/dao@1000.0.10':
-    resolution: {integrity: sha512-0+mDaeeubqoTfb806gtUGS/iNPXs5fgR87GrFhZJELCvxH1jj87XngoRdYBVJtTTMznBaagqZ6ZyfP9hUZnKKg==}
+  '@ickb/dao@1000.0.12':
+    resolution: {integrity: sha512-hxXn+BwmkPXicJyiX0a9DzLneGciIXxg64LQxya9VbV+XWk0brzTEoZGNC2rE+WN9a5toHlnn9mIoMQh5jWz4w==}
 
   '@joyid/ckb@1.1.2':
     resolution: {integrity: sha512-+e+ISF566zaKNhKNSSS5kBw8or4Kb5Xqxe/2jVkUXKkqVHSS02Trrqe0g4IjSyeN9bszzolr1XgStv2hz62tqA==}
@@ -871,7 +871,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@ickb/dao@1000.0.10(typescript@5.8.3)':
+  '@ickb/dao@1000.0.12(typescript@5.8.3)':
     dependencies:
       '@ckb-ccc/core': 1.8.0(typescript@5.8.3)
     transitivePeerDependencies:

@@ -24,7 +24,7 @@ export class Order implements ScriptDeps {
    *
    * @returns A new instance of Order.
    */
-  static from(c: ScriptDeps, udtHandler: UdtHandler): Order {
+  static fromDeps(c: ScriptDeps, udtHandler: UdtHandler): Order {
     return new Order(c.script, c.cellDeps, udtHandler);
   }
 
