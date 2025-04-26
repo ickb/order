@@ -6,10 +6,10 @@ import { OrderCell, OrderGroup } from "./cells.js";
 /**
  * Utilities for managing UDT orders on Nervos L1 such as minting, matching, and melting.
  */
-export class Order implements ScriptDeps {
+export class OrderManager implements ScriptDeps {
   /**
-   * Creates an instance of Order.
-   * @param script - The script associated with the order.
+   * Creates an instance of OrderManager.
+   * @param script - The order script.
    * @param cellDeps - The cell dependencies for the order.
    * @param udtHandler - The handler for UDT (User Defined Token).
    */
@@ -20,12 +20,12 @@ export class Order implements ScriptDeps {
   ) {}
 
   /**
-   * Returns a new instance of Order.
+   * Returns a new instance of OrderManager.
    *
-   * @returns A new instance of Order.
+   * @returns A new instance of OrderManager.
    */
-  static fromDeps(c: ScriptDeps, udtHandler: UdtHandler): Order {
-    return new Order(c.script, c.cellDeps, udtHandler);
+  static fromDeps(c: ScriptDeps, udtHandler: UdtHandler): OrderManager {
+    return new OrderManager(c.script, c.cellDeps, udtHandler);
   }
 
   /**
