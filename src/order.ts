@@ -1,6 +1,6 @@
 import { ccc } from "@ckb-ccc/core";
 import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/dao";
-import { Data, Info, Relative, type Ratio } from "./entities.js";
+import { OrderData, Info, Relative, type Ratio } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
 
 /**
@@ -64,7 +64,7 @@ export class OrderManager implements ScriptDeps {
     ckbAmount: ccc.FixedPoint, // it will use way more CKB than expressed in ckbAmount
     udtAmount: ccc.FixedPoint,
   ): void {
-    const data = Data.from({
+    const data = OrderData.from({
       udtAmount,
       master: {
         type: "relative",
@@ -168,7 +168,7 @@ export class OrderManager implements ScriptDeps {
           type: this.udtHandler.script,
           capacity: ckbOut,
         },
-        Data.from({
+        OrderData.from({
           udtAmount: udtOut,
           master: {
             type: "absolute",

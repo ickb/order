@@ -1,5 +1,5 @@
-import { ccc, type FixedPoint } from "@ckb-ccc/core";
-import { Data } from "./entities.js";
+import { ccc } from "@ckb-ccc/core";
+import { OrderData } from "./entities.js";
 
 /**
  * Represents an order cell in the system.
@@ -16,7 +16,7 @@ export class OrderCell {
    */
   constructor(
     public cell: ccc.Cell,
-    public data: Data,
+    public data: OrderData,
     public ckbOccupied: ccc.FixedPoint,
     public ckbUnoccupied: ccc.FixedPoint,
     public absTotal: ccc.Num,
@@ -43,7 +43,7 @@ export class OrderCell {
    * @throws Will throw an error if the cell is invalid.
    */
   static mustFrom(cell: ccc.Cell): OrderCell {
-    const data = Data.decode(cell.outputData);
+    const data = OrderData.decode(cell.outputData);
     data.validate();
 
     const udtAmount = data.udtAmount;
@@ -147,7 +147,7 @@ export class OrderCell {
     let aOut: ccc.FixedPoint;
     let bOut: ccc.FixedPoint;
     let aMinMatch: ccc.FixedPoint;
-    let aMin: FixedPoint;
+    let aMin: ccc.FixedPoint;
     let newMatch: () => Match;
 
     if (isCkb2Udt) {

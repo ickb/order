@@ -556,9 +556,9 @@ function masterValidate(master: Master): void {
 /**
  * Represents a structure containing UDT amount, master information, and additional info.
  *
- * @interface DataLike
+ * @interface OrderDataLike
  */
-export interface DataLike {
+export interface OrderDataLike {
   /**
    * The amount of UDT (User Defined Token).
    *
@@ -586,7 +586,7 @@ export interface DataLike {
  * with validation and utility methods.
  *
  * @class Data
- * @extends {mol.Entity.Base<DataLike, Data>}
+ * @extends {mol.Entity.Base<OrderDataLike, OrderData>}
  * @codec {mol.struct({ udtAmount: mol.Uint128, master: MasterCodec, info: Info })}
  */
 @mol.codec(
@@ -596,9 +596,9 @@ export interface DataLike {
     info: Info,
   }),
 )
-export class Data extends mol.Entity.Base<DataLike, Data>() {
+export class OrderData extends mol.Entity.Base<OrderDataLike, OrderData>() {
   /**
-   * Creates an instance of Data.
+   * Creates an instance of OrderData.
    *
    * @param {ccc.Num} udtAmount - The amount of UDT.
    * @param {Master} master - The master information.
@@ -613,19 +613,19 @@ export class Data extends mol.Entity.Base<DataLike, Data>() {
   }
 
   /**
-   * Creates a Data instance from a DataLike object.
+   * Creates a OrderData instance from a OrderDataLike object.
    *
    * @static
-   * @param {DataLike} data - The data-like object to convert.
-   * @returns {Data} The created Data instance.
+   * @param {OrderDataLike} data - The data-like object to convert.
+   * @returns {OrderData} The created Data instance.
    */
-  static override from(data: DataLike): Data {
-    if (data instanceof Data) {
+  static override from(data: OrderDataLike): OrderData {
+    if (data instanceof OrderData) {
       return data;
     }
 
     const { udtAmount, master, info } = data;
-    return new Data(
+    return new OrderData(
       ccc.numFrom(udtAmount),
       masterFrom(master),
       Info.from(info),
