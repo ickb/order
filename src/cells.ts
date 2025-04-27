@@ -362,16 +362,13 @@ export class OrderGroup {
 
   /**
    * Checks if the specified lock is the owner of the master cell.
-   * @param lock - The lock to check ownership against.
+   *
+   * @param locks - The locks to check ownership against.
    * @returns True if the lock is the owner, otherwise false.
    */
-  /**
-   * Checks if the specified lock is the owner of the master cell.
-   * @param lock - The lock to check ownership against.
-   * @returns True if the lock is the owner, otherwise false.
-   */
-  isOwner(lock: ccc.ScriptLike): boolean {
-    return this.master.cellOutput.lock.eq(lock);
+  isOwner(...locks: ccc.ScriptLike[]): boolean {
+    const lock = this.master.cellOutput.lock;
+    return locks.some((l) => lock.eq(l));
   }
 }
 
