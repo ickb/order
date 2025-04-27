@@ -6,9 +6,13 @@ UDT Limit Order utilities built on top of CCC
 
 ```mermaid
 graph TD;
-    A[ickb/utils] --> B[ckb-ccc/core];
-    C[ickb/order] --> A[ickb/utils];
-    C --> B[ckb-ccc/core];
+    A["@ickb/utils"] --> B["@ckb-ccc/core"];
+    C["@ickb/order"] --> A;
+    C --> B;
+
+    click A "https://github.com/ickb/utils" "Go to @ickb/utils"
+    click B "https://github.com/ckb-devrel/ccc/tree/master/packages/core" "Go to @ckb-ccc/core"
+    click C "https://github.com/ickb/order" "Go to @ickb/order"
 ```
 
 ## Epoch Semantic Versioning
