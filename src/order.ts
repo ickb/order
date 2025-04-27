@@ -1,5 +1,5 @@
 import { ccc } from "@ckb-ccc/core";
-import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/dao";
+import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/utils";
 import { OrderData, Info, Relative, type Ratio } from "./entities.js";
 import { OrderCell, OrderGroup } from "./cells.js";
 

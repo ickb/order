@@ -1,5 +1,5 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { CheckedInt32LE, union } from "@ickb/dao";
+import { CheckedInt32LE, union } from "@ickb/utils";
 
 /**
  * Represents a ratio-like structure that contains two scales.
