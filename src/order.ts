@@ -24,8 +24,13 @@ export class OrderManager implements ScriptDeps {
    *
    * @returns A new instance of OrderManager.
    */
-  static fromDeps(c: ScriptDeps, udtHandler: UdtHandler): OrderManager {
-    return new OrderManager(c.script, c.cellDeps, udtHandler);
+  static fromDeps(
+    deps: ScriptDeps,
+    udtHandler: UdtHandler,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._: never[]
+  ): OrderManager {
+    return new OrderManager(deps.script, deps.cellDeps, udtHandler);
   }
 
   /**
