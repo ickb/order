@@ -1,4 +1,4 @@
-import { ccc } from "@ckb-ccc/core";
+import { ccc, Cell } from "@ckb-ccc/core";
 import { OrderData } from "./entities.js";
 
 /**
@@ -297,6 +297,41 @@ export interface Match {
 }
 
 /**
+ * Represents a master cell
+ */
+export class MasterCell {
+  /**
+   * Creates an instance of MasterCell.
+   * @param cell - The ccc.Cell instance to be wrapped by the MasterCell.
+   */
+  constructor(public cell: ccc.Cell) {}
+
+  /**
+   * Creates a MasterCell instance from a cell-like object.
+   * @param cellLike - An object that can be converted to a ccc.Cell.
+   * @returns A new instance of MasterCell.
+   */
+  static from(cellLike: ccc.CellLike): MasterCell {
+    return new MasterCell(Cell.from(cellLike));
+  }
+
+  /**
+   * Validates the MasterCell against an OrderCell.
+   * @param order - The OrderCell to validate against.
+   * @throws Error if the order script is different or if the master is different.
+   */
+  validate(order: OrderCell): void {
+    if (!this.cell.cellOutput.type?.eq(order.cell.cellOutput.lock)) {
+      throw Error("Order script different");
+    }
+
+    if (!order.getMaster().eq(this.cell.outPoint)) {
+      throw Error("Master is different");
+    }
+  }
+}
+
+/**
  * Represents a group of orders associated with a master cell.
  */
 export class OrderGroup {
@@ -307,7 +342,7 @@ export class OrderGroup {
    * @param origin - The original order associated with the group.
    */
   constructor(
-    public master: ccc.Cell,
+    public master: MasterCell,
     public order: OrderCell,
     public origin: OrderCell,
   ) {}
@@ -320,7 +355,7 @@ export class OrderGroup {
    * @returns An OrderGroup instance or undefined if creation fails.
    */
   static tryFrom(
-    master: ccc.Cell,
+    master: MasterCell,
     order: OrderCell,
     origin: OrderCell,
   ): OrderGroup | undefined {
@@ -336,14 +371,7 @@ export class OrderGroup {
    * @throws Will throw an error if validation fails.
    */
   validate(): void {
-    if (!this.master.cellOutput.type?.eq(this.order.cell.cellOutput.lock)) {
-      throw Error("Order script different");
-    }
-
-    if (!this.order.getMaster().eq(this.master.outPoint)) {
-      throw Error("Master is different");
-    }
-
+    this.master.validate(this.order);
     this.origin.validate(this.order);
   }
 
@@ -367,7 +395,7 @@ export class OrderGroup {
    * @returns True if the lock is the owner, otherwise false.
    */
   isOwner(...locks: ccc.ScriptLike[]): boolean {
-    const lock = this.master.cellOutput.lock;
+    const lock = this.master.cell.cellOutput.lock;
     return locks.some((l) => lock.eq(l));
   }
 }

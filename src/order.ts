@@ -1,7 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/utils";
 import { OrderData, Info, Relative, type Ratio } from "./entities.js";
-import { OrderCell, OrderGroup } from "./cells.js";
+import { MasterCell, OrderCell, OrderGroup } from "./cells.js";
 
 /**
  * Utilities for managing UDT orders on Nervos L1 such as minting, matching, and melting.
@@ -321,7 +321,7 @@ export class OrderManager implements ScriptDeps {
     tx.addUdtHandlers(this.udtHandler);
 
     tx.addInput(group.order.cell);
-    tx.addInput(group.master);
+    tx.addInput(group.master.cell);
   }
 
   /**
@@ -336,10 +336,10 @@ export class OrderManager implements ScriptDeps {
     ]);
 
     const rawGroups = new Map(
-      allMasters.map((c) => [
-        c.outPoint.toBytes().toString(),
+      allMasters.map((master) => [
+        master.cell.outPoint.toBytes().toString(),
         {
-          master: c,
+          master,
           origin: undefined as Promise<OrderCell | undefined> | undefined,
           orders: [] as OrderCell[],
         },
@@ -423,8 +423,8 @@ export class OrderManager implements ScriptDeps {
    * @param client - The client used to interact with the blockchain.
    * @returns A promise that resolves to an array of master cells.
    */
-  private async findAllMasters(client: ccc.Client): Promise<ccc.Cell[]> {
-    const masters: ccc.Cell[] = [];
+  private async findAllMasters(client: ccc.Client): Promise<MasterCell[]> {
+    const masters: MasterCell[] = [];
     for await (const cell of client.findCellsOnChain(
       {
         script: this.script,
@@ -438,7 +438,7 @@ export class OrderManager implements ScriptDeps {
       if (!this.isMaster(cell)) {
         continue;
       }
-      masters.push(cell);
+      masters.push(new MasterCell(cell));
     }
     return masters;
   }
