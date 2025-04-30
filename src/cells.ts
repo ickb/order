@@ -112,6 +112,15 @@ export class OrderCell {
   }
 
   /**
+   * Checks if the order is fulfilled.
+   *
+   * @returns True if the order is fulfilled (not matchable), otherwise false.
+   */
+  isFulfilled(): boolean {
+    return !this.isMatchable();
+  }
+
+  /**
    * Retrieves the master out point of the order.
    * @returns The master out point associated with the order.
    */
@@ -394,7 +403,7 @@ export class OrderGroup {
    * @param locks - The locks to check ownership against.
    * @returns True if the lock is the owner, otherwise false.
    */
-  isOwner(...locks: ccc.ScriptLike[]): boolean {
+  isOwner(...locks: ccc.Script[]): boolean {
     const lock = this.master.cell.cellOutput.lock;
     return locks.some((l) => lock.eq(l));
   }

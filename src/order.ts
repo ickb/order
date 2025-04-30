@@ -1,6 +1,6 @@
 import { ccc } from "@ckb-ccc/core";
 import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/utils";
-import { OrderData, Info, Relative, type Ratio } from "./entities.js";
+import { OrderData, Relative, type Ratio, type Info } from "./entities.js";
 import { MasterCell, OrderCell, OrderGroup } from "./cells.js";
 
 /**
@@ -14,9 +14,9 @@ export class OrderManager implements ScriptDeps {
    * @param udtHandler - The handler for UDT (User Defined Token).
    */
   constructor(
-    public script: ccc.Script,
-    public cellDeps: ccc.CellDep[],
-    public udtHandler: UdtHandler,
+    public readonly script: ccc.Script,
+    public readonly cellDeps: ccc.CellDep[],
+    public readonly udtHandler: UdtHandler,
   ) {}
 
   /**
@@ -77,8 +77,6 @@ export class OrderManager implements ScriptDeps {
       },
       info,
     });
-
-    data.validate();
 
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
@@ -305,31 +303,42 @@ export class OrderManager implements ScriptDeps {
   }
 
   /**
-   * Melts the specified order group, removing it from the transaction.
-   * @param tx - The transaction to which the group will be added.
-   * @param group - The order group to melt.
-   * @throws Will throw an error if the order is incompatible.
+   * Melts the specified order groups, removing them from the transaction.
+   *
+   * @param tx - The transaction to which the groups will be added.
+   * @param groups - The order groups to melt.
+   * @returns void
    */
-  melt(tx: SmartTransaction, group: OrderGroup): void {
-    if (!this.isOrder(group.order.cell)) {
-      throw Error("Melt impossible with incompatible cell");
+  melt(
+    tx: SmartTransaction,
+    groups: OrderGroup[],
+    options?: {
+      isFulfilledOnly?: boolean;
+    },
+  ): void {
+    const isFulfilledOnly = options?.isFulfilledOnly ?? false;
+    if (isFulfilledOnly) {
+      groups = groups.filter((g) => g.order.isFulfilled());
     }
-
-    group.validate();
-
+    if (groups.length === 0) {
+      return;
+    }
     tx.addCellDeps(this.cellDeps);
     tx.addUdtHandlers(this.udtHandler);
 
-    tx.addInput(group.order.cell);
-    tx.addInput(group.master.cell);
+    for (const group of groups) {
+      tx.addInput(group.order.cell);
+      tx.addInput(group.master.cell);
+    }
   }
 
   /**
-   * Finds orders associated with the current order instance.
+   * Finds orders associated with the current order manager instance.
+   *
    * @param client - The client used to interact with the blockchain.
-   * @returns A promise that resolves to an array of OrderGroup instances.
+   * @returns An async generator that yields OrderGroup instances.
    */
-  async findOrders(client: ccc.Client): Promise<OrderGroup[]> {
+  async *findOrders(client: ccc.Client): AsyncGenerator<OrderGroup> {
     const [simpleOrders, allMasters] = await Promise.all([
       this.findSimpleOrders(client),
       this.findAllMasters(client),
@@ -360,7 +369,6 @@ export class OrderManager implements ScriptDeps {
       rawGroup.origin = this.findOrigin(client, master);
     }
 
-    const result: OrderGroup[] = [];
     for (const {
       master,
       origin: originPromise,
@@ -383,10 +391,8 @@ export class OrderManager implements ScriptDeps {
         continue;
       }
 
-      result.push(orderGroup);
+      yield orderGroup;
     }
-
-    return result;
   }
 
   /**

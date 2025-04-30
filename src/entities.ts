@@ -229,20 +229,20 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
    *
    * @static
    * @param {boolean} isCkb2Udt - Indicates if the conversion is from CKB to UDT.
-   * @param {Ratio} ratio - The ratio to use for conversion.
-   * @param {number} [ckbMinMatchLog=Info.ckbMinMatchLogDefault()] - The minimum match log value for CKB.
+   * @param {RatioLike} ratioLike - The ratio to use for conversion.
+   * @param {number} [ckbMinMatchLog] - The minimum match log value for CKB (Default: 33, about 86 CKB)
    * @returns {Info} The created Info instance.
    */
   static create(
     isCkb2Udt: boolean,
-    ratio: Ratio,
+    ratioLike: RatioLike,
     ckbMinMatchLog = Info.ckbMinMatchLogDefault(),
   ): Info {
-    return new Info(
-      isCkb2Udt ? ratio : Ratio.empty(),
-      isCkb2Udt ? Ratio.empty() : ratio,
+    return Info.from({
+      ckbToUdt: isCkb2Udt ? ratioLike : Ratio.empty(),
+      udtToCkb: isCkb2Udt ? Ratio.empty() : ratioLike,
       ckbMinMatchLog,
-    );
+    });
   }
 
   /**
