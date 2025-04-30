@@ -1,10 +1,11 @@
 import { ccc, Cell } from "@ckb-ccc/core";
 import { OrderData } from "./entities.js";
+import type { ValueComponents } from "@ickb/utils";
 
 /**
  * Represents an order cell in the system.
  */
-export class OrderCell {
+export class OrderCell implements ValueComponents {
   /**
    * Creates an instance of OrderCell.
    * @param cell - The cell associated with the order.
@@ -22,6 +23,24 @@ export class OrderCell {
     public absTotal: ccc.Num,
     public absProgress: ccc.Num,
   ) {}
+
+  /**
+   * Gets the order CKB amount.
+   *
+   * @returns The CKB amount as a `ccc.Num`.
+   */
+  get ckbValue(): ccc.Num {
+    return this.cell.cellOutput.capacity;
+  }
+
+  /**
+   * Gets the order UDT amount.
+   *
+   * @returns The UDT amount as a `ccc.Num`.
+   */
+  get udtValue(): ccc.Num {
+    return this.data.udtValue;
+  }
 
   /**
    * Tries to create an OrderCell from a given cell.
@@ -46,7 +65,7 @@ export class OrderCell {
     const data = OrderData.decode(cell.outputData);
     data.validate();
 
-    const udtAmount = data.udtAmount;
+    const udtValue = data.udtValue;
     const ckbUnoccupied = cell.capacityFree;
     const ckbOccupied = cell.cellOutput.capacity - cell.capacityFree;
 
@@ -56,10 +75,10 @@ export class OrderCell {
 
     // Calculate completion progress, relProgress= 100*Number(absProgress)/Number(absTotal)
     const ckb2UdtValue = isCkb2Udt
-      ? ckbUnoccupied * ckbToUdt.ckbScale + udtAmount * ckbToUdt.udtScale
+      ? ckbUnoccupied * ckbToUdt.ckbScale + udtValue * ckbToUdt.udtScale
       : 0n;
     const udt2CkbValue = isUdt2Ckb
-      ? ckbUnoccupied * udtToCkb.ckbScale + udtAmount * udtToCkb.udtScale
+      ? ckbUnoccupied * udtToCkb.ckbScale + udtValue * udtToCkb.udtScale
       : 0n;
     const absTotal =
       ckb2UdtValue === 0n
@@ -74,7 +93,7 @@ export class OrderCell {
     const absProgress = data.info.isDualRatio()
       ? absTotal
       : isCkb2Udt
-        ? udtAmount * ckbToUdt.udtScale
+        ? udtValue * ckbToUdt.udtScale
         : ckbUnoccupied * udtToCkb.ckbScale;
 
     return new OrderCell(
@@ -100,7 +119,7 @@ export class OrderCell {
    * @returns True if the order is matchable as UDT to CKB, otherwise false.
    */
   isUdt2CkbMatchable(): boolean {
-    return this.data.info.isUdt2Ckb() && this.data.udtAmount > 0n;
+    return this.data.info.isUdt2Ckb() && this.data.udtValue > 0n;
   }
 
   /**
@@ -129,17 +148,6 @@ export class OrderCell {
   }
 
   /**
-   * Gets the amounts of CKB and UDT in the order.
-   * @returns An object containing the CKB and UDT amounts.
-   */
-  getAmounts(): { ckbIn: ccc.FixedPoint; udtIn: ccc.FixedPoint } {
-    return {
-      ckbIn: this.cell.cellOutput.capacity,
-      udtIn: this.data.udtAmount,
-    };
-  }
-
-  /**
    * Matches the order based on the specified parameters.
    * @param isCkb2Udt - Indicates if the match is for CKB to UDT.
    * @param allowanceStep - The step allowance for matching.
@@ -161,7 +169,7 @@ export class OrderCell {
 
     if (isCkb2Udt) {
       ({ ckbScale: aScale, udtScale: bScale } = this.data.info.ckbToUdt);
-      ({ ckbIn: aIn, udtIn: bIn } = this.getAmounts());
+      [aIn, bIn] = [this.ckbValue, this.udtValue];
       aMinMatch = this.data.info.getCkbMinMatch();
       aMin = this.ckbOccupied;
       newMatch = (): Match => ({
@@ -173,7 +181,7 @@ export class OrderCell {
       });
     } else {
       ({ ckbScale: bScale, udtScale: aScale } = this.data.info.ckbToUdt);
-      ({ ckbIn: bIn, udtIn: aIn } = this.getAmounts());
+      [bIn, aIn] = [this.ckbValue, this.udtValue];
       aMinMatch =
         (this.data.info.getCkbMinMatch() * bScale + aScale - 1n) / aScale;
       aMin = ccc.Zero;
@@ -308,7 +316,7 @@ export interface Match {
 /**
  * Represents a master cell
  */
-export class MasterCell {
+export class MasterCell implements ValueComponents {
   /**
    * Creates an instance of MasterCell.
    * @param cell - The ccc.Cell instance to be wrapped by the MasterCell.
@@ -338,12 +346,30 @@ export class MasterCell {
       throw Error("Master is different");
     }
   }
+
+  /**
+   * Gets the CKB value of the cell.
+   *
+   * @returns The total CKB amount as a `ccc.Num`.
+   */
+  get ckbValue(): ccc.Num {
+    return this.cell.cellOutput.capacity;
+  }
+
+  /**
+   * Gets the UDT value of the cell.
+   *
+   * @returns The UDT amount as a `ccc.Num`, which for Master Cells is zero.
+   */
+  get udtValue(): ccc.Num {
+    return ccc.Zero;
+  }
 }
 
 /**
  * Represents a group of orders associated with a master cell.
  */
-export class OrderGroup {
+export class OrderGroup implements ValueComponents {
   /**
    * Creates an instance of OrderGroup.
    * @param master - The master cell associated with the order group.
@@ -406,6 +432,26 @@ export class OrderGroup {
   isOwner(...locks: ccc.Script[]): boolean {
     const lock = this.master.cell.cellOutput.lock;
     return locks.some((l) => lock.eq(l));
+  }
+
+  /**
+   * Gets the CKB value of the group.
+   *
+   * @returns The total CKB amount as a `ccc.Num`, which is the sum of the CKB values of the order cell and the master cell.
+   */
+  get ckbValue(): ccc.Num {
+    return (
+      this.order.cell.cellOutput.capacity + this.master.cell.cellOutput.capacity
+    );
+  }
+
+  /**
+   * Gets the UDT value of the group.
+   *
+   * @returns The UDT amount as a `ccc.Num`, derived from the order cell.
+   */
+  get udtValue(): ccc.Num {
+    return this.order.data.udtValue;
   }
 }
 

@@ -564,7 +564,7 @@ export interface OrderDataLike {
    *
    * @type {ccc.NumLike}
    */
-  udtAmount: ccc.NumLike;
+  udtValue: ccc.NumLike;
 
   /**
    * The master information, which can be either relative or absolute.
@@ -587,11 +587,11 @@ export interface OrderDataLike {
  *
  * @class Data
  * @extends {mol.Entity.Base<OrderDataLike, OrderData>}
- * @codec {mol.struct({ udtAmount: mol.Uint128, master: MasterCodec, info: Info })}
+ * @codec {mol.struct({ udtValue: mol.Uint128, master: MasterCodec, info: Info })}
  */
 @mol.codec(
   mol.struct({
-    udtAmount: mol.Uint128,
+    udtValue: mol.Uint128,
     master: MasterCodec,
     info: Info,
   }),
@@ -600,12 +600,12 @@ export class OrderData extends mol.Entity.Base<OrderDataLike, OrderData>() {
   /**
    * Creates an instance of OrderData.
    *
-   * @param {ccc.Num} udtAmount - The amount of UDT.
+   * @param {ccc.Num} udtValue - The amount of UDT.
    * @param {Master} master - The master information.
    * @param {Info} info - The additional information.
    */
   constructor(
-    public udtAmount: ccc.Num,
+    public udtValue: ccc.Num,
     public master: Master,
     public info: Info,
   ) {
@@ -624,9 +624,9 @@ export class OrderData extends mol.Entity.Base<OrderDataLike, OrderData>() {
       return data;
     }
 
-    const { udtAmount, master, info } = data;
+    const { udtValue, master, info } = data;
     return new OrderData(
-      ccc.numFrom(udtAmount),
+      ccc.numFrom(udtValue),
       masterFrom(master),
       Info.from(info),
     );
@@ -638,8 +638,8 @@ export class OrderData extends mol.Entity.Base<OrderDataLike, OrderData>() {
    * @throws {Error} If the UDT amount is negative or if the master or info are invalid.
    */
   validate(): void {
-    if (this.udtAmount < 0) {
-      throw Error("UdtAmount invalid, negative");
+    if (this.udtValue < 0) {
+      throw Error("udtValue invalid, negative");
     }
     masterValidate(this.master);
     this.info.validate();

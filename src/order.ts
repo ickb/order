@@ -59,18 +59,18 @@ export class OrderManager implements ScriptDeps {
    * @param tx - The transaction to which the order will be added.
    * @param lock - The lock script for the master cell.
    * @param info - The information related to the order.
-   * @param ckbAmount - The amount of CKB to allocate for the order.
-   * @param udtAmount - The amount of UDT to allocate for the order.
+   * @param ckbValue - The amount of CKB to allocate for the order.
+   * @param udtValue - The amount of UDT to allocate for the order.
    */
   mint(
     tx: SmartTransaction,
     lock: ccc.Script,
     info: Info,
-    ckbAmount: ccc.FixedPoint, // it will use way more CKB than expressed in ckbAmount
-    udtAmount: ccc.FixedPoint,
+    ckbValue: ccc.FixedPoint, // it will use way more CKB than expressed in ckbValue
+    udtValue: ccc.FixedPoint,
   ): void {
     const data = OrderData.from({
-      udtAmount,
+      udtValue,
       master: {
         type: "relative",
         value: Relative.create(1n), // master is appended right after its order
@@ -90,7 +90,7 @@ export class OrderManager implements ScriptDeps {
       data.toBytes(),
     );
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    tx.outputs[position]!.capacity += ckbAmount;
+    tx.outputs[position]!.capacity += ckbValue;
 
     // Append master cell to Outputs right after its order
     tx.addOutput({
@@ -172,7 +172,7 @@ export class OrderManager implements ScriptDeps {
           capacity: ckbOut,
         },
         OrderData.from({
-          udtAmount: udtOut,
+          udtValue: udtOut,
           master: {
             type: "absolute",
             value: order.getMaster(),
