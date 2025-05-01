@@ -1,6 +1,11 @@
 import { ccc } from "@ckb-ccc/core";
-import type { ScriptDeps, SmartTransaction, UdtHandler } from "@ickb/utils";
-import { OrderData, Relative, type Ratio, type Info } from "./entities.js";
+import type {
+  ScriptDeps,
+  SmartTransaction,
+  UdtHandler,
+  ValueComponents,
+} from "@ickb/utils";
+import { OrderData, Relative, type Info } from "./entities.js";
 import { MasterCell, OrderCell, OrderGroup } from "./cells.js";
 
 /**
@@ -56,19 +61,23 @@ export class OrderManager implements ScriptDeps {
 
   /**
    * Mints a new order cell and appends it to the transaction.
+   *
    * @param tx - The transaction to which the order will be added.
    * @param lock - The lock script for the master cell.
    * @param info - The information related to the order.
-   * @param ckbValue - The amount of CKB to allocate for the order.
-   * @param udtValue - The amount of UDT to allocate for the order.
+   * @param amounts - The amounts related to the order, including CKB and UDT values.
+   * @param amounts.ckbValue - The amount of CKB to allocate for the order. It will use way more CKB than expressed.
+   * @param amounts.udtValue - The amount of UDT to allocate for the order.
+   *
+   * @returns void
    */
   mint(
     tx: SmartTransaction,
     lock: ccc.Script,
     info: Info,
-    ckbValue: ccc.FixedPoint, // it will use way more CKB than expressed in ckbValue
-    udtValue: ccc.FixedPoint,
+    amounts: ValueComponents,
   ): void {
+    const { ckbValue, udtValue } = amounts;
     const data = OrderData.from({
       udtValue,
       master: {
@@ -187,22 +196,27 @@ export class OrderManager implements ScriptDeps {
    * Finds the best match for the given orders based on the current rate.
    * @param tx - The transaction to which the best match will be added.
    * @param orders - The list of order cells to consider for matching.
+   * @param allowance - The allowance for CKB and UDT as a `ValueComponents`.
    * @param currentRate - The current exchange rate between CKB and UDT.
    * @param options - Optional parameters for matching.
    */
   bestMatch(
     tx: SmartTransaction,
     orders: OrderCell[],
-    currentRate: Ratio,
+    _allowance: ValueComponents, // Allowance for CKB and UDT
+    currentRate: {
+      ckbScale: ccc.Num; // Scale for CKB
+      udtScale: ccc.Num; // Scale for UDT
+    },
     options?: {
-      minCkbGain?: ccc.FixedPoint;
-      feeRate?: number;
-      ckbAllowanceStep?: ccc.FixedPoint;
+      minCkbGain?: ccc.FixedPoint; // Minimum CKB gain for the match
+      feeRate?: ccc.Num; // Fee rate for the transaction
+      ckbAllowanceStep?: ccc.FixedPoint; // Step for CKB allowance
     },
   ): void {
     const { ckbScale, udtScale } = currentRate;
-    const ckbMinGain = options?.minCkbGain ?? ccc.Zero;
-    const feeRate = options?.feeRate ?? 1000; // Base fee rate
+    const feeRate = options?.feeRate ?? 1000n; // Base fee rate
+    const ckbMinGain = options?.minCkbGain ?? 3n * feeRate;
     const ckbAllowanceStep =
       options?.ckbAllowanceStep ?? ccc.fixedPointFrom(1000); // 1000 CKB
     const udtAllowanceStep =
