@@ -5,7 +5,7 @@ import type {
   UdtHandler,
   ValueComponents,
 } from "@ickb/utils";
-import { OrderData, Relative, type Info } from "./entities.js";
+import { OrderData, Relative, type InfoLike } from "./entities.js";
 import { MasterCell, OrderCell, OrderGroup } from "./cells.js";
 
 /**
@@ -74,7 +74,7 @@ export class OrderManager implements ScriptDeps {
   mint(
     tx: SmartTransaction,
     lock: ccc.Script,
-    info: Info,
+    info: InfoLike,
     amounts: ValueComponents,
   ): void {
     const { ckbValue, udtValue } = amounts;

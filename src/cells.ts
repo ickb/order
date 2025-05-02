@@ -1,4 +1,4 @@
-import { ccc, Cell } from "@ckb-ccc/core";
+import { ccc } from "@ckb-ccc/core";
 import { OrderData } from "./entities.js";
 import type { ValueComponents } from "@ickb/utils";
 
@@ -329,7 +329,7 @@ export class MasterCell implements ValueComponents {
    * @returns A new instance of MasterCell.
    */
   static from(cellLike: ccc.CellLike): MasterCell {
-    return new MasterCell(Cell.from(cellLike));
+    return new MasterCell(ccc.Cell.from(cellLike));
   }
 
   /**

@@ -1,32 +1,11 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { CheckedInt32LE, union } from "@ickb/utils";
-
-/**
- * Represents a ratio-like structure that contains two scales.
- *
- * @interface RatioLike
- */
-export interface RatioLike {
-  /**
-   * The scale of the CKB (Common Knowledge Base) in a numeric format.
-   *
-   * @type {ccc.NumLike}
-   */
-  ckbScale: ccc.NumLike;
-
-  /**
-   * The scale of the UDT (User Defined Token) in a numeric format.
-   *
-   * @type {ccc.NumLike}
-   */
-  udtScale: ccc.NumLike;
-}
+import { CheckedInt32LE, union, ExchangeRatio } from "@ickb/utils";
 
 /**
  * Represents a ratio of two scales, CKB and UDT, with validation and comparison methods.
  *
  * @class Ratio
- * @extends {mol.Entity.Base<RatioLike, Ratio>}
+ * @extends {mol.Entity.Base<ExchangeRatio, Ratio>}
  * @codec {mol.struct({ ckbScale: mol.Uint64, udtScale: mol.Uint64 })}
  */
 @mol.codec(
@@ -35,7 +14,7 @@ export interface RatioLike {
     udtScale: mol.Uint64,
   }),
 )
-export class Ratio extends mol.Entity.Base<RatioLike, Ratio>() {
+export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
   /**
    * Creates an instance of Ratio.
    *
@@ -50,19 +29,19 @@ export class Ratio extends mol.Entity.Base<RatioLike, Ratio>() {
   }
 
   /**
-   * Creates a Ratio instance from a RatioLike object.
+   * Creates a Ratio instance from a ExchangeRatio object.
    *
    * @static
-   * @param {RatioLike} ratio - The ratio-like object to convert.
+   * @param {ExchangeRatio} ratio - The exchange ratio object to convert.
    * @returns {Ratio} The created Ratio instance.
    */
-  static override from(ratio: RatioLike): Ratio {
+  static override from(ratio: ExchangeRatio): Ratio {
     if (ratio instanceof Ratio) {
       return ratio;
     }
 
     const { ckbScale, udtScale } = ratio;
-    return new Ratio(ccc.numFrom(ckbScale), ccc.numFrom(udtScale));
+    return new Ratio(ckbScale, udtScale);
   }
 
   /**
@@ -155,16 +134,16 @@ export interface InfoLike {
   /**
    * The ratio for converting CKB to UDT.
    *
-   * @type {RatioLike}
+   * @type {ExchangeRatio}
    */
-  ckbToUdt: RatioLike;
+  ckbToUdt: ExchangeRatio;
 
   /**
    * The ratio for converting UDT to CKB.
    *
-   * @type {RatioLike}
+   * @type {ExchangeRatio}
    */
-  udtToCkb: RatioLike;
+  udtToCkb: ExchangeRatio;
 
   /**
    * The minimum match log value for CKB.
@@ -229,13 +208,13 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
    *
    * @static
    * @param {boolean} isCkb2Udt - Indicates if the conversion is from CKB to UDT.
-   * @param {RatioLike} ratioLike - The ratio to use for conversion.
+   * @param {ExchangeRatio} ratioLike - The ratio to use for conversion.
    * @param {number} [ckbMinMatchLog] - The minimum match log value for CKB (Default: 33, about 86 CKB)
    * @returns {Info} The created Info instance.
    */
   static create(
     isCkb2Udt: boolean,
-    ratioLike: RatioLike,
+    ratioLike: ExchangeRatio,
     ckbMinMatchLog = Info.ckbMinMatchLogDefault(),
   ): Info {
     return Info.from({
@@ -259,9 +238,7 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
       if (this.udtToCkb.isPopulated()) {
         return;
       } else {
-        throw Error(
-          "Info invalid: ckbToUdt is Empty, but udtToCkb is not Populated",
-        );
+        throw Error("ckbToUdt is Empty, but udtToCkb is not Populated");
       }
     }
 
@@ -269,16 +246,12 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
       if (this.ckbToUdt.isPopulated()) {
         return;
       } else {
-        throw Error(
-          "Info invalid: udtToCkb is Empty, but ckbToUdt is not Populated",
-        );
+        throw Error("udtToCkb is Empty, but ckbToUdt is not Populated");
       }
     }
 
     if (!this.ckbToUdt.isPopulated() || !this.udtToCkb.isPopulated()) {
-      throw Error(
-        "Info invalid: both ckbToUdt and udtToCkb should be Populated",
-      );
+      throw Error("One ratio is invalid, so not Empty and not Populated");
     }
 
     // Check that if we convert from ckb to udt and then back from udt to ckb, it doesn't lose value.
@@ -286,9 +259,7 @@ export class Info extends mol.Entity.Base<InfoLike, Info>() {
       this.ckbToUdt.ckbScale * this.udtToCkb.udtScale <
       this.ckbToUdt.udtScale * this.udtToCkb.ckbScale
     ) {
-      throw Error(
-        "Info invalid: udtToCkb and ckbToUdt allow order value to be extracted",
-      );
+      throw Error("udtToCkb and ckbToUdt allow order value to be extracted");
     }
   }
 
