@@ -10,7 +10,6 @@ export class OrderCell implements ValueComponents {
    * Creates an instance of OrderCell.
    * @param cell - The cell associated with the order.
    * @param data - The data related to the order.
-   * @param ckbOccupied - The amount of CKB occupied by the order.
    * @param ckbUnoccupied - The amount of CKB unoccupied by the order.
    * @param absTotal - The absolute total value of the order.
    * @param absProgress - The absolute progress of the order.
@@ -18,7 +17,6 @@ export class OrderCell implements ValueComponents {
   constructor(
     public cell: ccc.Cell,
     public data: OrderData,
-    public ckbOccupied: ccc.FixedPoint,
     public ckbUnoccupied: ccc.FixedPoint,
     public absTotal: ccc.Num,
     public absProgress: ccc.Num,
@@ -67,7 +65,6 @@ export class OrderCell implements ValueComponents {
 
     const udtValue = data.udtValue;
     const ckbUnoccupied = cell.capacityFree;
-    const ckbOccupied = cell.cellOutput.capacity - cell.capacityFree;
 
     const { ckbToUdt, udtToCkb } = data.info;
     const isCkb2Udt = data.info.isCkb2Udt();
@@ -96,14 +93,16 @@ export class OrderCell implements ValueComponents {
         ? udtValue * ckbToUdt.udtScale
         : ckbUnoccupied * udtToCkb.ckbScale;
 
-    return new OrderCell(
-      cell,
-      data,
-      ckbOccupied,
-      ckbUnoccupied,
-      absTotal,
-      absProgress,
-    );
+    return new OrderCell(cell, data, ckbUnoccupied, absTotal, absProgress);
+  }
+
+  /**
+   * Checks if the order is is dual ratio.
+   *
+   * @returns True if the order is dual ratio (liquidity provider), otherwise false.
+   */
+  isDualRatio(): boolean {
+    return this.data.info.isDualRatio();
   }
 
   /**
@@ -145,82 +144,6 @@ export class OrderCell implements ValueComponents {
    */
   getMaster(): ccc.OutPoint {
     return this.data.getMaster(this.cell.outPoint);
-  }
-
-  /**
-   * Matches the order based on the specified parameters.
-   * @param isCkb2Udt - Indicates if the match is for CKB to UDT.
-   * @param allowanceStep - The step allowance for matching.
-   * @returns A generator yielding match results.
-   */
-  *match(
-    isCkb2Udt: boolean,
-    allowanceStep: ccc.FixedPoint,
-  ): Generator<Match, void, void> {
-    let aScale: ccc.Num;
-    let bScale: ccc.Num;
-    let aIn: ccc.FixedPoint;
-    let bIn: ccc.FixedPoint;
-    let aOut: ccc.FixedPoint;
-    let bOut: ccc.FixedPoint;
-    let aMinMatch: ccc.FixedPoint;
-    let aMin: ccc.FixedPoint;
-    let newMatch: () => Match;
-
-    if (isCkb2Udt) {
-      ({ ckbScale: aScale, udtScale: bScale } = this.data.info.ckbToUdt);
-      [aIn, bIn] = [this.ckbValue, this.udtValue];
-      aMinMatch = this.data.info.getCkbMinMatch();
-      aMin = this.ckbOccupied;
-      newMatch = (): Match => ({
-        ckbOut: aOut,
-        udtOut: bOut,
-        ckbDelta: aOut - aIn,
-        udtDelta: bOut - bIn,
-        isFulfilled: aOut === aMin,
-      });
-    } else {
-      ({ ckbScale: bScale, udtScale: aScale } = this.data.info.ckbToUdt);
-      [bIn, aIn] = [this.ckbValue, this.udtValue];
-      aMinMatch =
-        (this.data.info.getCkbMinMatch() * bScale + aScale - 1n) / aScale;
-      aMin = ccc.Zero;
-      newMatch = (): Match => ({
-        ckbOut: bOut,
-        udtOut: aOut,
-        ckbDelta: bOut - bIn,
-        udtDelta: aOut - aIn,
-        isFulfilled: aOut === aMin,
-      });
-    }
-
-    if (aIn <= aMin || aScale <= 0n || bScale <= 0n || allowanceStep <= 0) {
-      return;
-    }
-
-    bOut = bIn + allowanceStep;
-    aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
-
-    // Check if allowanceStep was too low to even fulfill partially
-    if (aOut + aMinMatch > aIn) {
-      return;
-    }
-
-    while (aMin < aOut) {
-      yield newMatch();
-
-      bOut += allowanceStep;
-      aOut = getNonDecreasing(bScale, aScale, bIn, aIn, bOut);
-    }
-
-    // Check if order was over-fulfilled
-    if (aOut < aMin) {
-      // Fulfill fully the order
-      aOut = aMin;
-      bOut = getNonDecreasing(aScale, bScale, aIn, bIn, aOut);
-    }
-
-    yield newMatch();
   }
 
   /**
@@ -300,17 +223,6 @@ export class OrderCell implements ValueComponents {
 
     return best;
   }
-}
-
-/**
- * Represents a match result between orders.
- */
-export interface Match {
-  ckbOut: ccc.FixedPoint; // The amount of CKB output.
-  udtOut: ccc.FixedPoint; // The amount of UDT output.
-  ckbDelta: ccc.FixedPoint; // The change in CKB.
-  udtDelta: ccc.FixedPoint; // The change in UDT.
-  isFulfilled: boolean; // Indicates if the match is fulfilled.
 }
 
 /**
@@ -453,21 +365,4 @@ export class OrderGroup implements ValueComponents {
   get udtValue(): ccc.Num {
     return this.order.data.udtValue;
   }
-}
-
-/**
- * Applies limit order rule on non-decreasing value to calculate bOut:
- * min bOut such that aScale * aIn + bScale * bIn <= aScale * aOut + bScale * bOut
- * bOut = (aScale * (aIn - aOut) + bScale * bIn) / bScale
- * But integer divisions truncate, so we need to round to the upper value
- * bOut = (aScale * (aIn - aOut) + bScale * (bIn + 1) - 1) / bScale
- */
-function getNonDecreasing(
-  aScale: ccc.Num,
-  bScale: ccc.Num,
-  aIn: ccc.FixedPoint,
-  bIn: ccc.FixedPoint,
-  aOut: ccc.FixedPoint,
-): ccc.FixedPoint {
-  return (aScale * (aIn - aOut) + bScale * (bIn + 1n) - 1n) / bScale;
 }

@@ -1,6 +1,6 @@
 # iCKB/Order
 
-UDT Limit Order utilities built on top of CCC
+UDT Limit Order utilities built on top of CCC.
 
 ## Dependencies
 
