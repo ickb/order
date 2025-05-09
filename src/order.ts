@@ -325,7 +325,7 @@ export class OrderManager implements ScriptDeps {
    *
    * The matching for each order is performed in a sequential manner:
    *  1. An array of matchers is created from the order pool, filtering out any undefined ones and sorting
-   *     them by the real match ratio.
+   *     them in decreasing order by real match ratio (best gain per unit first).
    *  2. A cumulative empty Match object is initialized and immediately yielded as the first match.
    *  3. For each matcher, the algorithm performs a fair distribution of the matcher's `bMaxMatch` into
    *     partial matches. The distribution follows these rules:
@@ -349,11 +349,11 @@ export class OrderManager implements ScriptDeps {
     ckbMiningFee: ccc.FixedPoint,
   ): Generator<Match, void, void> {
     // Generate matchers from the given order pool using OrderMatcher, filter out undefined results,
-    // and sort the matchers by their real match ratio in increasing order.
+    // and sort the matchers by their real match ratio in decreasing order.
     const matchers = orderPool
       .map((o) => OrderMatcher.from(o, isCkb2Udt, ckbMiningFee))
       .filter((m) => m !== undefined)
-      .sort((a, b) => a.realRatio - b.realRatio);
+      .sort((a, b) => b.realRatio - a.realRatio);
 
     // Initialize an accumulator for the cumulative match.
     let acc: Match = {
