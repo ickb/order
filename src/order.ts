@@ -30,18 +30,18 @@ export class OrderManager implements ScriptDeps {
   /**
    * Returns a new instance of OrderManager.
    *
-   * @param deps - An object containing required dependencies including the order script and cell dependencies.
+   * @param deps - The script dependencies.
+   * @param deps.order - The script dependencies for order.
    * @param udtHandler - The handler for UDT tokens.
-   * @param _ - Additional unused parameters.
    * @returns A new instance of OrderManager.
    */
   static fromDeps(
-    deps: ScriptDeps,
+    { order }: { order: ScriptDeps },
     udtHandler: UdtHandler,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ..._: never[]
   ): OrderManager {
-    return new OrderManager(deps.script, deps.cellDeps, udtHandler);
+    return new OrderManager(order.script, order.cellDeps, udtHandler);
   }
 
   /**

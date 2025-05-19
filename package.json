@@ -1,6 +1,6 @@
 {
   "name": "@ickb/order",
-  "version": "1000.0.48",
+  "version": "1000.0.52",
   "description": "UDT Limit Order utilities built on top of CCC",
   "author": "phroi",
   "license": "MIT",
@@ -30,14 +30,14 @@
     "provenance": true
   },
   "devDependencies": {
-    "@eslint/js": "^9.26.0",
-    "eslint": "^9.26.0",
+    "@eslint/js": "^9.27.0",
+    "eslint": "^9.27.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.0"
+    "typescript-eslint": "^8.32.1"
   },
   "dependencies": {
-    "@ckb-ccc/core": "^1.8.0",
-    "@ickb/utils": "^1000.0.46"
+    "@ckb-ccc/core": "^1.8.1",
+    "@ickb/utils": "^1000.0.52"
   }
 }
