@@ -1,6 +1,6 @@
 {
   "name": "@ickb/order",
-  "version": "1000.0.52",
+  "version": "1000.0.55",
   "description": "UDT Limit Order utilities built on top of CCC",
   "author": "phroi",
   "license": "MIT",
@@ -38,6 +38,6 @@
   },
   "dependencies": {
     "@ckb-ccc/core": "^1.8.1",
-    "@ickb/utils": "^1000.0.52"
+    "@ickb/utils": "^1000.0.55"
   }
 }

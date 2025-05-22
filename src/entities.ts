@@ -1,5 +1,5 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { CheckedInt32LE, union, ExchangeRatio } from "@ickb/utils";
+import { CheckedInt32LE, union, ExchangeRatio, gcd, max } from "@ickb/utils";
 
 /**
  * Represents a ratio of two scales, CKB and UDT, with validation and comparison methods.
@@ -122,6 +122,109 @@ export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
     return Number(
       this.ckbScale * other.udtScale - other.ckbScale * this.udtScale,
     );
+  }
+
+  /**
+   * Applies a fee to the current conversion ratio.
+   *
+   * This method adjusts the ratio by applying a fee relative to a base value.
+   * It modifies the scaling factors accordingly and reduces them by their greatest common divisor (GCD).
+   * If the resulting scaling factors exceed 64 bits, they are shifted to prevent potential overflow.
+   *
+   * @param isCkb2Udt - Indicates the conversion direction.
+   *                  - If true, the conversion is from CKB to UDT.
+   *                  - Otherwise, for UDT to CKB conversion, the scaling factors are swapped.
+   * @param fee - The fee to apply during conversion as a `ccc.Num`.
+   *              Must be less than the provided feeBase.
+   * @param feeBase - The base reference for the fee calculation as a `ccc.Num`.
+   *                  Used to adjust the scaling factors and prevent oversized values.
+   * @returns A new Ratio instance with the adjusted scaling factors after applying the fee.
+   *
+   * @throws Error if fee is greater than or equal to feeBase.
+   */
+  applyFee(isCkb2Udt: boolean, fee: ccc.Num, feeBase: ccc.Num): Ratio {
+    if (fee >= feeBase) {
+      throw Error("Fee too big respectfully to feeBase");
+    }
+
+    if (fee === ccc.Zero) {
+      return this;
+    }
+
+    // Extract scaling factors from the current Ratio.
+    let { ckbScale: aScale, udtScale: bScale } = this;
+
+    // For UDT to CKB conversion, swap the scaling factors.
+    if (!isCkb2Udt) {
+      [aScale, bScale] = [bScale, aScale];
+    }
+
+    // Adjust scales by applying the fee.
+    aScale *= feeBase - fee;
+    bScale *= feeBase;
+
+    // Reduce the ratio by dividing by the greatest common divisor.
+    const g = gcd(aScale, bScale);
+    aScale /= g;
+    bScale /= g;
+
+    // Prevent potential overflow by ensuring the bit length stays within 64 bits.
+    const maxBitLen = max(aScale.toString(2).length, bScale.toString(2).length);
+    if (maxBitLen > 64) {
+      const shift = BigInt(maxBitLen - 64);
+      aScale >>= shift;
+      bScale >>= shift;
+    }
+
+    // Rebuild and return the adjusted ratio based on the conversion direction.
+    return Ratio.from({
+      ckbScale: isCkb2Udt ? aScale : bScale,
+      udtScale: isCkb2Udt ? bScale : aScale,
+    });
+  }
+
+  /**
+   * Converts an amount between CKB and UDT based on the specified conversion direction and scaling factors.
+   *
+   * @param isCkb2Udt - If true, converts from CKB to UDT; if false, converts from UDT to CKB.
+   * @param amount - The amount to convert, represented as a `ccc.FixedPoint`.
+   * @param mustCeil - When true, applies a ceiling adjustment during conversion for rounding up;
+   *                   if false, applies a floor adjustment for rounding down.
+   * @returns The converted amount as a `ccc.FixedPoint` in the target unit.
+   *
+   * @throws Error if the ExchangeRatio instance is not properly populated.
+   *
+   * @remarks
+   * The conversion is achieved using the internal scaling factors:
+   * - `ckbScale` is used when converting from CKB.
+   * - `udtScale` is used when converting from UDT.
+   *
+   * If the conversion direction is from UDT to CKB, the scales are swapped.
+   * The adjustment is determined by the `mustCeil` flag:
+   * - If `mustCeil` is true, an adjustment of `(udtScale - 1n)` is applied to round up.
+   * - Otherwise, no adjustment (i.e., `ccc.Zero`) is applied for rounding down.
+   */
+  convert(
+    isCkb2Udt: boolean,
+    amount: ccc.FixedPoint,
+    mustCeil: boolean,
+  ): ccc.FixedPoint {
+    if (!this.isPopulated()) {
+      throw Error("Invalid midpoint ExchangeRatio");
+    }
+
+    if (amount === ccc.Zero) {
+      return ccc.Zero;
+    }
+
+    let { ckbScale: aScale, udtScale: bScale } = this;
+    if (!isCkb2Udt) {
+      // For UDT to CKB conversion, swap the scaling factors.
+      [aScale, bScale] = [bScale, aScale];
+    }
+
+    // Apply ceiling adjustment when necessary; otherwise, use floor adjustment.
+    return (amount * aScale + (mustCeil ? bScale - 1n : ccc.Zero)) / bScale;
   }
 }
 

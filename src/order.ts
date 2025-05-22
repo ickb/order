@@ -7,7 +7,7 @@ import {
   type UdtHandler,
   type ValueComponents,
 } from "@ickb/utils";
-import { OrderData, Relative, type InfoLike } from "./entities.js";
+import { Info, OrderData, Ratio, Relative, type InfoLike } from "./entities.js";
 import { MasterCell, OrderCell, OrderGroup } from "./cells.js";
 
 /**
@@ -73,6 +73,102 @@ export class OrderManager implements ScriptDeps {
   }
 
   /**
+   * Previews the conversion between CKB and UDT.
+   *
+   * This method calculates a conversion preview using an exchange ratio midpoint.
+   *
+   * Optionally, a fee may be applied that influences the effective conversion rate,
+   * resulting in additional fees or gains. The fee is applied by adjusting the ratio using the
+   * provided fee and feeBase. In practice, the fee is incorporated by multiplying the numerator by
+   * (feeBase - fee) and the denominator by feeBase.
+   *
+   * Effectively the computed fee scales the converted amount by (feeBase - fee) / feeBase, for example:
+   * -  (100000 - 1000) / 100000 = 0.99 (1% fee).
+   * -  (100000 - 300) / 100000 = 0.997 (0.3% fee).
+   * -  (100000 - 1) / 100000 = 0.99999 (0.001% fee).
+   *
+   * This computation ensures that the fee is applied as a fixed percentage using the same
+   * integer arithmetic as the midpoint conversion ratio, with control over rounding adjustments.
+   *
+   * @param isCkb2Udt - Indicates if the conversion is from CKB to UDT:
+   *                    - If true, converts CKB to UDT.
+   *                    - Otherwise, converts UDT to CKB.
+   * @param midpoint - The exchange ratio used as the midpoint for conversion.
+   *                   It should contain both CKB and UDT scaling factors.
+   * @param amounts - An object of ValueComponents containing the CKB and UDT amounts.
+   * @param options - Optional conversion parameters.
+   * @param options.fee - The fee (as a ccc.Num) to apply during conversion. It represents the fee portion
+   *                      in integer terms (e.g., fee basis-points) and defaults to ccc.Zero (i.e., no fee).
+   *                      Internally, the fee is applied as a scaling factor: (feeBase – fee) / feeBase.
+   * @param options.feeBase - The base reference (as a ccc.Num) used for fee calculation.
+   *                          Defaults to 100000n if not provided. The feeBase defines the scaling factor
+   *                          in which fee is applied, ensuring fee is always a fixed percentage.
+   * @param options.ckbMinMatchLog - Optional minimum logarithmic matching threshold for CKB.
+   *                                 This is used for further internal validation or matching criteria.
+   *                                 Defaults to 33 (~86 CKB) if not provided.
+   *
+   * @returns An object with the following properties:
+   * - convertedAmount: The converted amount as a ccc.FixedPoint in the target unit.
+   * - ckbFee: The fee (or gain) in CKB, computed as a ccc.FixedPoint.
+   * - info: Additional conversion information as Info, to be used in OrderManager.mint.
+   *
+   * @example
+   * // Example usage previewing the conversion from CKB to iCKB UDT:
+   * const result = OrderManager.convert(
+   *   true, // CKB to UDT
+   *   ickbExchangeRatio(tipHeader),
+   *   {
+   *     ckbValue: ccc.FixedPointFrom("1000"), // 1000 CKB
+   *     udtValue: ccc.Zero,
+   *   },
+   *   {
+   *     feeBase: 100000n,
+   *     fee: 1n, // (100000 - 1) / 100000 = 0.99999 (i.e., a 0.001% fee is deducted).
+   *     ckbMinMatchLog: 33
+   *   }
+   * );
+   */
+  static convert(
+    isCkb2Udt: boolean,
+    midpoint: ExchangeRatio,
+    amounts: ValueComponents,
+    options?: {
+      fee?: ccc.Num;
+      feeBase?: ccc.Num;
+      ckbMinMatchLog?: number;
+    },
+  ): { convertedAmount: ccc.FixedPoint; ckbFee: ccc.FixedPoint; info: Info } {
+    // Set fee and feeBase with fallback default values.
+    const fee = options?.fee ?? ccc.Zero;
+    const feeBase = options?.feeBase ?? 100000n;
+
+    // Create a Ratio instance from the midpoint ratio.
+    const base = Ratio.from(midpoint);
+
+    // Apply the fee adjustment to the ratio.
+    const adjusted = base.applyFee(isCkb2Udt, fee, feeBase);
+
+    // Select the input amount based on the conversion direction.
+    const amount = isCkb2Udt ? amounts.ckbValue : amounts.udtValue;
+
+    // Perform the conversion using the adjusted ratio.
+    const convertedAmount = adjusted.convert(isCkb2Udt, amount, true);
+    let ckbFee = ccc.Zero;
+
+    // Calculate fee (or gain) based on the original midpoint rate.
+    if (amount > ccc.Zero && fee !== ccc.Zero) {
+      ckbFee = isCkb2Udt
+        ? amount - base.convert(false, convertedAmount, false)
+        : base.convert(true, amount, false) - convertedAmount;
+    }
+
+    // Generate additional conversion info for further processing.
+    const info = Info.create(isCkb2Udt, adjusted, options?.ckbMinMatchLog);
+
+    return { convertedAmount, ckbFee, info };
+  }
+
+  /**
    * Mints a new order cell and appends it to the transaction.
    *
    * The method performs the following:
@@ -83,7 +179,7 @@ export class OrderManager implements ScriptDeps {
    *
    * @param tx - The transaction to which the order will be added.
    * @param lock - The lock script for the master cell.
-   * @param info - The information related to the order.
+   * @param info - The information related to the order, usually calculated using OrderManager.convert.
    * @param amounts - The amounts for the order, including:
    *    @param amounts.ckbValue - The amount of CKB to allocate for the order (note: more CKB than expressed might be used).
    *    @param amounts.udtValue - The amount of UDT to allocate for the order.
