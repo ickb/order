@@ -1,6 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import {
   BufferedGenerator,
+  hexFrom,
   type ExchangeRatio,
   type ScriptDeps,
   type SmartTransaction,
@@ -561,7 +562,7 @@ export class OrderManager implements ScriptDeps {
 
     const rawGroups = new Map(
       allMasters.map((master) => [
-        master.cell.outPoint.toBytes().toString(),
+        hexFrom(master.cell.outPoint),
         {
           master,
           origin: undefined as Promise<OrderCell | undefined> | undefined,
@@ -572,7 +573,7 @@ export class OrderManager implements ScriptDeps {
 
     for (const order of simpleOrders) {
       const master = order.getMaster();
-      const key = master.toBytes().toString();
+      const key = hexFrom(master);
       const rawGroup = rawGroups.get(key);
       if (!rawGroup) {
         continue;
