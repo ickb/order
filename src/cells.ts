@@ -1,18 +1,25 @@
 import { ccc } from "@ckb-ccc/core";
 import { OrderData } from "./entities.js";
 import type { ValueComponents } from "@ickb/utils";
-
 /**
- * Represents an order cell in the system.
+ * Represents a parsed order cell on the blockchain.
+ *
+ * Implements `ValueComponents` to expose the cell's raw data and its
+ * value breakdown (CKB and UDT).
  */
 export class OrderCell implements ValueComponents {
   /**
    * Creates an instance of OrderCell.
-   * @param cell - The cell associated with the order.
-   * @param data - The data related to the order.
-   * @param ckbUnoccupied - The amount of CKB unoccupied by the order.
-   * @param absTotal - The absolute total value of the order.
-   * @param absProgress - The absolute progress of the order.
+   *
+   * @param cell - The raw cell fetched from the chain.
+   * @param data - Decoded order data with parameters (rates, directions, etc.).
+   * @param ckbUnoccupied - Amount of CKB in this cell not used in state rent.
+   * @param absTotal - Absolute total value of this order (in base units).
+   * @param absProgress - Absolute amount filled so far (in base units).
+   * @param maturity - Estimated completion time:
+   *   - `bigint` Unix timestamp in milliseconds if scheduled,
+   *   - `0n` if already completed,
+   *   - `undefined` if no estimate is available.
    */
   constructor(
     public cell: ccc.Cell,
@@ -20,30 +27,34 @@ export class OrderCell implements ValueComponents {
     public ckbUnoccupied: ccc.FixedPoint,
     public absTotal: ccc.Num,
     public absProgress: ccc.Num,
+    public maturity: bigint | undefined,
   ) {}
 
   /**
    * Gets the order CKB amount.
    *
-   * @returns The CKB amount as a `ccc.Num`.
+   * @returns The CKB amount as a `ccc.FixedPoint`.
    */
-  get ckbValue(): ccc.Num {
+  get ckbValue(): ccc.FixedPoint {
     return this.cell.cellOutput.capacity;
   }
 
   /**
    * Gets the order UDT amount.
    *
-   * @returns The UDT amount as a `ccc.Num`.
+   * @returns The UDT amount as a `ccc.FixedPoint`.
    */
-  get udtValue(): ccc.Num {
+  get udtValue(): ccc.FixedPoint {
     return this.data.udtValue;
   }
 
   /**
-   * Tries to create an OrderCell from a given cell.
-   * @param cell - The cell to create the OrderCell from.
-   * @returns An OrderCell instance or undefined if creation fails.
+   * Attempts to parse an OrderCell from a raw cell.
+   *
+   * Returns `undefined` if parsing or validation fails.
+   *
+   * @param cell - The raw chain cell to convert.
+   * @returns An `OrderCell` instance or `undefined`.
    */
   static tryFrom(cell: ccc.Cell): OrderCell | undefined {
     try {
@@ -54,29 +65,35 @@ export class OrderCell implements ValueComponents {
   }
 
   /**
-   * Creates an OrderCell from a given cell, throwing an error if the cell is invalid.
-   * @param cell - The cell to create the OrderCell from.
-   * @returns An OrderCell instance.
-   * @throws Will throw an error if the cell is invalid.
+   * Parses and validates a raw cell as OrderCell.
+   *
+   * Throws if the cell is invalid or data validation fails.
+   *
+   * @param cell - The raw chain cell to convert.
+   * @returns A new `OrderCell` instance.
+   * @throws When decoding or validation fails.
    */
   static mustFrom(cell: ccc.Cell): OrderCell {
+    // Decode and validate the order payload
     const data = OrderData.decode(cell.outputData);
     data.validate();
 
     const udtValue = data.udtValue;
     const ckbUnoccupied = cell.capacityFree;
-
     const { ckbToUdt, udtToCkb } = data.info;
     const isCkb2Udt = data.info.isCkb2Udt();
     const isUdt2Ckb = data.info.isUdt2Ckb();
+    const isDualRatio = isCkb2Udt && isUdt2Ckb;
 
-    // Calculate completion progress, relProgress= 100*Number(absProgress)/Number(absTotal)
+    // Compute total values in base units
     const ckb2UdtValue = isCkb2Udt
       ? ckbUnoccupied * ckbToUdt.ckbScale + udtValue * ckbToUdt.udtScale
       : 0n;
     const udt2CkbValue = isUdt2Ckb
       ? ckbUnoccupied * udtToCkb.ckbScale + udtValue * udtToCkb.udtScale
       : 0n;
+
+    // Determine absolute total: single or average for dual-ratio
     const absTotal =
       ckb2UdtValue === 0n
         ? udt2CkbValue
@@ -87,13 +104,24 @@ export class OrderCell implements ValueComponents {
               udt2CkbValue * ckbToUdt.ckbScale * ckbToUdt.udtScale) >>
             1n;
 
-    const absProgress = data.info.isDualRatio()
+    // Compute progress: full for dual, else based on direction
+    const absProgress = isDualRatio
       ? absTotal
       : isCkb2Udt
         ? udtValue * ckbToUdt.udtScale
         : ckbUnoccupied * udtToCkb.ckbScale;
 
-    return new OrderCell(cell, data, ckbUnoccupied, absTotal, absProgress);
+    // Maturity: undefined if in-progress or dual; zero if complete
+    const maturity = isDualRatio || absTotal !== absProgress ? undefined : 0n;
+
+    return new OrderCell(
+      cell,
+      data,
+      ckbUnoccupied,
+      absTotal,
+      absProgress,
+      maturity,
+    );
   }
 
   /**
@@ -262,20 +290,20 @@ export class MasterCell implements ValueComponents {
   /**
    * Gets the CKB value of the cell.
    *
-   * @returns The total CKB amount as a `ccc.Num`.
+   * @returns The total CKB amount as a `ccc.FixedPoint`.
    */
-  get ckbValue(): ccc.Num {
+  get ckbValue(): ccc.FixedPoint {
     return this.cell.cellOutput.capacity;
   }
 
   /**
    * Gets the UDT value of the cell.
    *
-   * @returns The UDT amount as a `ccc.Num`, which for Master Cells is zero.
+   * For a Master Cell, the UDT amount is always zero.
+   *
+   * @returns The UDT amount as a `ccc.FixedPoint` (0n).
    */
-  get udtValue(): ccc.Num {
-    return ccc.Zero;
-  }
+  readonly udtValue = 0n;
 }
 
 /**
@@ -349,9 +377,9 @@ export class OrderGroup implements ValueComponents {
   /**
    * Gets the CKB value of the group.
    *
-   * @returns The total CKB amount as a `ccc.Num`, which is the sum of the CKB values of the order cell and the master cell.
+   * @returns The total CKB amount as a `ccc.FixedPoint`, which is the sum of the CKB values of the order cell and the master cell.
    */
-  get ckbValue(): ccc.Num {
+  get ckbValue(): ccc.FixedPoint {
     return (
       this.order.cell.cellOutput.capacity + this.master.cell.cellOutput.capacity
     );
@@ -360,9 +388,9 @@ export class OrderGroup implements ValueComponents {
   /**
    * Gets the UDT value of the group.
    *
-   * @returns The UDT amount as a `ccc.Num`, derived from the order cell.
+   * @returns The UDT amount as a `ccc.FixedPoint`, derived from the order cell.
    */
-  get udtValue(): ccc.Num {
+  get udtValue(): ccc.FixedPoint {
     return this.order.data.udtValue;
   }
 }

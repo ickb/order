@@ -147,7 +147,7 @@ export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
       throw Error("Fee too big respectfully to feeBase");
     }
 
-    if (fee === ccc.Zero) {
+    if (fee === 0n) {
       return this;
     }
 
@@ -202,7 +202,7 @@ export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
    * If the conversion direction is from UDT to CKB, the scales are swapped.
    * The adjustment is determined by the `mustCeil` flag:
    * - If `mustCeil` is true, an adjustment of `(udtScale - 1n)` is applied to round up.
-   * - Otherwise, no adjustment (i.e., `ccc.Zero`) is applied for rounding down.
+   * - Otherwise, no adjustment (i.e., `0n`) is applied for rounding down.
    */
   convert(
     isCkb2Udt: boolean,
@@ -213,8 +213,8 @@ export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
       throw Error("Invalid midpoint ExchangeRatio");
     }
 
-    if (amount === ccc.Zero) {
-      return ccc.Zero;
+    if (amount === 0n) {
+      return 0n;
     }
 
     let { ckbScale: aScale, udtScale: bScale } = this;
@@ -224,7 +224,7 @@ export class Ratio extends mol.Entity.Base<ExchangeRatio, Ratio>() {
     }
 
     // Apply ceiling adjustment when necessary; otherwise, use floor adjustment.
-    return (amount * aScale + (mustCeil ? bScale - 1n : ccc.Zero)) / bScale;
+    return (amount * aScale + (mustCeil ? bScale - 1n : 0n)) / bScale;
   }
 }
 
@@ -251,9 +251,9 @@ export interface InfoLike {
   /**
    * The minimum match log value for CKB.
    *
-   * @type {ccc.NumLike}
+   * @type {ccc.FixedPointLike}
    */
-  ckbMinMatchLog: ccc.NumLike;
+  ckbMinMatchLog: ccc.FixedPointLike;
 }
 
 /**
@@ -636,9 +636,9 @@ export interface OrderDataLike {
   /**
    * The amount of UDT (User Defined Token).
    *
-   * @type {ccc.NumLike}
+   * @type {ccc.FixedPointLike}
    */
-  udtValue: ccc.NumLike;
+  udtValue: ccc.FixedPointLike;
 
   /**
    * The master information, which can be either relative or absolute.
@@ -674,12 +674,12 @@ export class OrderData extends mol.Entity.Base<OrderDataLike, OrderData>() {
   /**
    * Creates an instance of OrderData.
    *
-   * @param {ccc.Num} udtValue - The amount of UDT.
+   * @param {ccc.FixedPoint} udtValue - The amount of UDT.
    * @param {Master} master - The master information.
    * @param {Info} info - The additional information.
    */
   constructor(
-    public udtValue: ccc.Num,
+    public udtValue: ccc.FixedPoint,
     public master: Master,
     public info: Info,
   ) {

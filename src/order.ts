@@ -1,6 +1,7 @@
 import { ccc } from "@ckb-ccc/core";
 import {
   BufferedGenerator,
+  defaultFindCellsLimit,
   hexFrom,
   type ExchangeRatio,
   type ScriptDeps,
@@ -99,7 +100,7 @@ export class OrderManager implements ScriptDeps {
    * @param amounts - An object of ValueComponents containing the CKB and UDT amounts.
    * @param options - Optional conversion parameters.
    * @param options.fee - The fee (as a ccc.Num) to apply during conversion. It represents the fee portion
-   *                      in integer terms (e.g., fee basis-points) and defaults to ccc.Zero (i.e., no fee).
+   *                      in integer terms (e.g., fee basis-points) and defaults to 0n (i.e., no fee).
    *                      Internally, the fee is applied as a scaling factor: (feeBase – fee) / feeBase.
    * @param options.feeBase - The base reference (as a ccc.Num) used for fee calculation.
    *                          Defaults to 100000n if not provided. The feeBase defines the scaling factor
@@ -120,7 +121,7 @@ export class OrderManager implements ScriptDeps {
    *   ickbExchangeRatio(tipHeader),
    *   {
    *     ckbValue: ccc.FixedPointFrom("1000"), // 1000 CKB
-   *     udtValue: ccc.Zero,
+   *     udtValue: 0n,
    *   },
    *   {
    *     feeBase: 100000n,
@@ -140,7 +141,7 @@ export class OrderManager implements ScriptDeps {
     },
   ): { convertedAmount: ccc.FixedPoint; ckbFee: ccc.FixedPoint; info: Info } {
     // Set fee and feeBase with fallback default values.
-    const fee = options?.fee ?? ccc.Zero;
+    const fee = options?.fee ?? 0n;
     const feeBase = options?.feeBase ?? 100000n;
 
     // Create a Ratio instance from the midpoint ratio.
@@ -154,10 +155,10 @@ export class OrderManager implements ScriptDeps {
 
     // Perform the conversion using the adjusted ratio.
     const convertedAmount = adjusted.convert(isCkb2Udt, amount, true);
-    let ckbFee = ccc.Zero;
+    let ckbFee = 0n;
 
     // Calculate fee (or gain) based on the original midpoint rate.
-    if (amount > ccc.Zero && fee !== ccc.Zero) {
+    if (amount > 0n && fee !== 0n) {
       ckbFee = isCkb2Udt
         ? amount - base.convert(false, convertedAmount, false)
         : base.convert(true, amount, false) - convertedAmount;
@@ -287,8 +288,8 @@ export class OrderManager implements ScriptDeps {
   ): Match {
     return (
       OrderMatcher.from(order, isCkb2Udt, 0n)?.match(allowance) ?? {
-        ckbDelta: ccc.Zero,
-        udtDelta: ccc.Zero,
+        ckbDelta: 0n,
+        udtDelta: 0n,
         partials: [],
       }
     );
@@ -324,8 +325,8 @@ export class OrderManager implements ScriptDeps {
     const orderSize = orderPool[0]?.cell.occupiedSize ?? 0;
     if (!orderSize) {
       return {
-        ckbDelta: ccc.Zero,
-        udtDelta: ccc.Zero,
+        ckbDelta: 0n,
+        udtDelta: 0n,
         partials: [],
       };
     }
@@ -363,8 +364,8 @@ export class OrderManager implements ScriptDeps {
     let best = {
       i: -1,
       j: -1,
-      ckbDelta: ccc.Zero,
-      udtDelta: ccc.Zero,
+      ckbDelta: 0n,
+      udtDelta: 0n,
       partials: [] as Match["partials"],
       ckbAllowance: allowance.ckbValue,
       udtAllowance: allowance.udtValue,
@@ -386,11 +387,7 @@ export class OrderManager implements ScriptDeps {
           const udtAllowance = allowance.udtValue + udtDelta;
           const gain = ckbDelta * ckbScale + udtDelta * udtScale;
 
-          if (
-            ckbAllowance >= ccc.Zero &&
-            udtAllowance >= ccc.Zero &&
-            gain > best.gain
-          ) {
+          if (ckbAllowance >= 0n && udtAllowance >= 0n && gain > best.gain) {
             best = {
               i,
               j,
@@ -454,8 +451,8 @@ export class OrderManager implements ScriptDeps {
 
     // Initialize an accumulator for the cumulative match.
     let acc: Match = {
-      ckbDelta: ccc.Zero,
-      udtDelta: ccc.Zero,
+      ckbDelta: 0n,
+      udtDelta: 0n,
       partials: [],
     };
 
@@ -542,24 +539,34 @@ export class OrderManager implements ScriptDeps {
   }
 
   /**
-   * Finds orders associated with the current order manager instance.
+   * Finds orders associated with this OrderManager instance.
    *
-   * This async generator performs the following steps:
-   * 1. Finds all simple orders using the lock script.
-   * 2. Finds all master cells using the type script.
-   * 3. Associates each simple order to its master cell group.
-   * 4. Retrieves the original order details and creates an OrderGroup if available.
+   * This async generator performs:
+   *   1. Fetch simple orders (lock-script cells matching order & UDT handler).
+   *   2. Fetch master cells (type-script cells matching order).
+   *   3. Group each simple order under its master cell; initiate origin lookup once.
+   *   4. For each group with orders and a resolved origin:
+   *      - Resolve the best order via `origin.resolve(orders)`.
+   *      - Construct an `OrderGroup` via `OrderGroup.tryFrom(...)`.
+   *      - Yield the valid `OrderGroup`.
    *
-   * @param client - The client used to interact with the blockchain.
-   *
-   * @yields OrderGroup instances that combine master, order, and origin cells.
+   * @param client – Client to interact with the blockchain.
+   * @param options.limit – Maximum cells to scan per findCells batch. Defaults to `defaultFindCellsLimit` (400).
+   * @yields OrderGroup instances combining master, order, and origin cells.
    */
-  async *findOrders(client: ccc.Client): AsyncGenerator<OrderGroup> {
+  async *findOrders(
+    client: ccc.Client,
+    options?: { limit?: number },
+  ): AsyncGenerator<OrderGroup> {
+    const limit = options?.limit ?? defaultFindCellsLimit;
+
+    // Fetch simple orders & master cells in parallel
     const [simpleOrders, allMasters] = await Promise.all([
-      this.findSimpleOrders(client),
-      this.findAllMasters(client),
+      this.findSimpleOrders(client, limit),
+      this.findAllMasters(client, limit),
     ]);
 
+    // Prepare a map of masterCellKey → { master, originPromise?, orders[] }
     const rawGroups = new Map(
       allMasters.map((master) => [
         hexFrom(master.cell.outPoint),
@@ -571,20 +578,24 @@ export class OrderManager implements ScriptDeps {
       ]),
     );
 
+    // Group simple orders by their master cell, kick off origin lookup once per master
     for (const order of simpleOrders) {
       const master = order.getMaster();
       const key = hexFrom(master);
       const rawGroup = rawGroups.get(key);
+
       if (!rawGroup) {
+        // No matching master cell found
         continue;
       }
+
       rawGroup.orders.push(order);
-      if (rawGroup.origin) {
-        continue;
-      }
-      rawGroup.origin = this.findOrigin(client, master);
+
+      // Only initialize origin lookup once
+      rawGroup.origin ??= this.findOrigin(client, master);
     }
 
+    // For each populated group, await origin, resolve the best order, and yield OrderGroup
     for (const {
       master,
       origin: originPromise,
@@ -593,10 +604,12 @@ export class OrderManager implements ScriptDeps {
       if (orders.length === 0 || !originPromise) {
         continue;
       }
+
       const origin = await originPromise;
       if (!origin) {
         continue;
       }
+
       const order = origin.resolve(orders);
       if (!order) {
         continue;
@@ -614,14 +627,19 @@ export class OrderManager implements ScriptDeps {
   /**
    * Finds simple orders on the blockchain.
    *
-   * Queries the blockchain for cells that have the lock equal to the order script and the type equal to the UDT handler's script.
+   * Queries cells whose lock script equals the order script and whose type script
+   * matches the UDT handler's script, returning only valid {@link OrderCell} instances.
    *
-   * @param client - The client used to interact with the blockchain.
-   *
-   * @returns A promise that resolves to an array of OrderCell instances representing simple orders.
+   * @param client – The client used to interact with the blockchain.
+   * @param limit – Maximum cells to scan per findCells batch.
+   * @returns Promise that resolves to an array of {@link OrderCell}.
    */
-  private async findSimpleOrders(client: ccc.Client): Promise<OrderCell[]> {
+  private async findSimpleOrders(
+    client: ccc.Client,
+    limit: number,
+  ): Promise<OrderCell[]> {
     const orders: OrderCell[] = [];
+
     for await (const cell of client.findCellsOnChain(
       {
         script: this.script,
@@ -633,28 +651,35 @@ export class OrderManager implements ScriptDeps {
         withData: true,
       },
       "asc",
-      400, // https://github.com/nervosnetwork/ckb/pull/4576
+      limit,
     )) {
       const order = OrderCell.tryFrom(cell);
       if (!order || !this.isOrder(cell)) {
+        // Skip non-order cells or failed conversions
         continue;
       }
       orders.push(order);
     }
+
     return orders;
   }
 
   /**
    * Finds all master cells on the blockchain.
    *
-   * Searches for cells where the type script exactly matches the order script.
+   * Searches for cells whose type script exactly matches the order script,
+   * then wraps them as {@link MasterCell} instances.
    *
-   * @param client - The client used to interact with the blockchain.
-   *
-   * @returns A promise that resolves to an array of MasterCell instances.
+   * @param client – The client used to interact with the blockchain.
+   * @param limit – Maximum cells to scan per findCells batch.
+   * @returns Promise that resolves to an array of {@link MasterCell}.
    */
-  private async findAllMasters(client: ccc.Client): Promise<MasterCell[]> {
+  private async findAllMasters(
+    client: ccc.Client,
+    limit: number,
+  ): Promise<MasterCell[]> {
     const masters: MasterCell[] = [];
+
     for await (const cell of client.findCellsOnChain(
       {
         script: this.script,
@@ -663,13 +688,15 @@ export class OrderManager implements ScriptDeps {
         withData: true,
       },
       "asc",
-      400, // https://github.com/nervosnetwork/ckb/pull/4576
+      limit,
     )) {
       if (!this.isMaster(cell)) {
+        // Skip cells that do not satisfy master criteria
         continue;
       }
       masters.push(new MasterCell(cell));
     }
+
     return masters;
   }
 
@@ -689,7 +716,7 @@ export class OrderManager implements ScriptDeps {
     master: ccc.OutPoint,
   ): Promise<OrderCell | undefined> {
     const { txHash, index: mIndex } = master;
-    for (let index = mIndex - 1n; index >= ccc.Zero; index--) {
+    for (let index = mIndex - 1n; index >= 0n; index--) {
       const cell = await client.getCell({ txHash, index });
       if (!cell) {
         return;
@@ -830,7 +857,7 @@ export class OrderMatcher {
       ({ ckbScale: bScale, udtScale: aScale } = order.data.info.ckbToUdt);
       [bIn, aIn] = [order.ckbValue, order.udtValue];
       bMinMatch = order.data.info.getCkbMinMatch();
-      aMin = ccc.Zero;
+      aMin = 0n;
       aMiningFee = 0n;
       bMiningFee = ckbMiningFee;
     }
@@ -883,8 +910,8 @@ export class OrderMatcher {
     // Check if allowance is too low to even fulfill partially.
     if (bAllowance < this.bMinMatch) {
       return {
-        ckbDelta: ccc.Zero,
-        udtDelta: ccc.Zero,
+        ckbDelta: 0n,
+        udtDelta: 0n,
         partials: [],
       };
     }
