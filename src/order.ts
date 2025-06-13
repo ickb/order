@@ -30,23 +30,6 @@ export class OrderManager implements ScriptDeps {
   ) {}
 
   /**
-   * Returns a new instance of OrderManager.
-   *
-   * @param deps - The script dependencies.
-   * @param deps.order - The script dependencies for order.
-   * @param udtHandler - The handler for UDT tokens.
-   * @returns A new instance of OrderManager.
-   */
-  static fromDeps(
-    { order }: { order: ScriptDeps },
-    udtHandler: UdtHandler,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ..._: never[]
-  ): OrderManager {
-    return new OrderManager(order.script, order.cellDeps, udtHandler);
-  }
-
-  /**
    * Checks if the given cell is an order.
    *
    * A cell is considered an order if its lock script matches the order script of the manager and its type script

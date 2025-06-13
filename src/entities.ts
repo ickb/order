@@ -1,5 +1,11 @@
 import { ccc, mol } from "@ckb-ccc/core";
-import { CheckedInt32LE, union, ExchangeRatio, gcd, max } from "@ickb/utils";
+import {
+  CheckedInt32LE,
+  union,
+  type ExchangeRatio,
+  gcd,
+  max,
+} from "@ickb/utils";
 
 /**
  * Represents a ratio of two scales, CKB and UDT, with validation and comparison methods.
